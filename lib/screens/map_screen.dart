@@ -13,7 +13,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  LatLng _currentPosition = const LatLng(52.5200, 13.4050); // Default Fallback: Berlin
+  LatLng _currentPosition = const LatLng(52.5200, 13.4050); // Fallback: Berlin
   List<Map<String, dynamic>> _spots = [];
   bool _isLoading = true;
 
@@ -50,9 +50,7 @@ class _MapScreenState extends State<MapScreen> {
         });
         _mapController.move(_currentPosition, 15.0);
       }
-    } catch (_) {
-      // Fallback bleibt bestehen
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchSpots() async {
@@ -115,7 +113,7 @@ class _MapScreenState extends State<MapScreen> {
                   if (success) {
                     await _fetchSpots();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('🎯 Spot "$title" auf GitHub Server gedroppt!')),
+                      SnackBar(content: Text('🎯 Spot "$title" auf der Map gedroppt!')),
                     );
                   }
                 }
@@ -134,6 +132,7 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: const Color(0xFF0A0D14),
       body: Stack(
         children: [
+          // STADIA MAPS MIT USER KEY (cb1_4sbc_1_dbf69fde2dc0cbb1af121b29)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -142,16 +141,19 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: GitHubService.stadiaDarkTileUrl,
+                additionalOptions: const {
+                  'r': '@2x', // Retina Resolution
+                },
+                userAgentPackageName: 'com.spotdrop.app',
               ),
               MarkerLayer(
                 markers: [
                   // Eigener Standort
                   Marker(
                     point: _currentPosition,
-                    width: 30,
-                    height: 30,
+                    width: 32,
+                    height: 32,
                     child: Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF00FFA3),
@@ -165,7 +167,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
 
-                  // Spots aus dem GitHub Server
+                  // Spots der Crew
                   ..._spots.map((spot) {
                     final lat = (spot['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (spot['lng'] as num?)?.toDouble() ?? 0.0;
@@ -178,7 +180,7 @@ class _MapScreenState extends State<MapScreen> {
                       child: GestureDetector(
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('📍 Spot: ${spot['title']} von ${spot['created_by']}')),
+                            SnackBar(content: Text('📍 Spot: ${spot['title']} (von ${spot['created_by']})')),
                           );
                         },
                         child: Container(
@@ -186,6 +188,12 @@ class _MapScreenState extends State<MapScreen> {
                             color: isGeo ? Colors.amber : const Color(0xFF6366F1),
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isGeo ? Colors.amber : const Color(0xFF6366F1)).withOpacity(0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
                           ),
                           child: Icon(
                             isGeo ? Icons.lock : Icons.location_on,
@@ -201,7 +209,7 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // Top Info
+          // Top Info Pill
           Positioned(
             top: 40,
             left: 16,
@@ -209,16 +217,22 @@ class _MapScreenState extends State<MapScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F1420).withOpacity(0.9),
+                color: const Color(0xFF0F1420).withOpacity(0.92),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFF1E283C)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Spots auf Server: ${_spots.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      const Icon(Icons.map, size: 14, color: Color(0xFF00FFA3)),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${GitHubService().currentGroupName ?? "Gruppe"} • ${_spots.length} Spots',
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.refresh, size: 16, color: Colors.grey),
