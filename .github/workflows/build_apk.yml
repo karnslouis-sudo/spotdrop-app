@@ -1,4 +1,4 @@
-name: Build Android Test APK
+name: Build Android APK and iOS IPA
 
 on:
   push:
@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -32,11 +31,8 @@ jobs:
 
       - name: Configure Kotlin 1.9.22 & Permissions
         run: |
-          # Upgrade Kotlin version in settings.gradle
           sed -i 's/1.7.10/1.9.22/g' android/settings.gradle || true
           sed -i 's/1.8.22/1.9.22/g' android/settings.gradle || true
-
-          # Permissions hinzufügen
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
@@ -50,4 +46,46 @@ jobs:
         with:
           name: spotdrop-app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter (Latest Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Clean and Regenerate Clean iOS Project
+        run: |
+          rm -rf ios
+          flutter create . --platforms=ios --org=com.spotdrop --project-name=spotdrop
+
+      - name: Configure iOS Permissions in Info.plist
+        run: |
+          plutil -insert NSCameraUsageDescription -string "Spotdrop benötigt Zugriff auf die Kamera für den Snap-Vault." ios/Runner/Info.plist || true
+          plutil -insert NSLocationWhenInUseUsageDescription -string "Spotdrop benötigt deinen Standort für die Spot-Map." ios/Runner/Info.plist || true
+          plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build iOS App (Release No-Codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package Payload into IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r -9 Spotdrop.ipa Payload
+
+      - name: Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotdrop-ios-ipa
+          path: Spotdrop.ipa
           retention-days: 14
