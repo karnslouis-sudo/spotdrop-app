@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/github_service.dart';
 
 class HubScreen extends StatefulWidget {
-  const HubScreen({super.key});
+  final VoidCallback onChangeGroup;
+  const HubScreen({super.key, required this.onChangeGroup});
 
   @override
   State<HubScreen> createState() => _HubScreenState();
@@ -21,7 +23,6 @@ class _HubScreenState extends State<HubScreen> {
   void initState() {
     super.initState();
     _fetchMessages();
-    // Auto-Polling alle 4 Sekunden für neue Chatnachrichten vom GitHub Server
     _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) => _fetchMessages(silent: true));
   }
 
@@ -63,41 +64,75 @@ class _HubScreenState extends State<HubScreen> {
             curve: Curves.easeOut,
           );
         }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fehler beim Senden über GitHub API.')),
-        );
       }
+    }
+  }
+
+  void _copyCode() {
+    final code = GitHubService().currentGroupCode;
+    if (code != null) {
+      Clipboard.setData(ClipboardData(text: code));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF00FFA3),
+          content: Text('Code "$code" kopiert! Teile ihn mit deiner Crew.', style: const TextStyle(color: Colors.black)),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = GitHubService().currentUser;
+    final service = GitHubService();
+    final myName = service.userName;
 
     return Column(
       children: [
-        // Chat Header Status
+        // Group Header Info Bar
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           color: const Color(0xFF0F1420),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.cloud_done, size: 14, color: Color(0xFF00FFA3)),
-                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: _copyCode,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF182133),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            service.currentGroupCode ?? 'NO-CODE',
+                            style: const TextStyle(
+                              color: Color(0xFF00FFA3),
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.copy, size: 12, color: Color(0xFF00FFA3)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Text(
-                    'Verbunden: ${GitHubService().repoName}',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'monospace'),
+                    service.currentGroupName ?? 'Crew',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ],
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 16, color: Colors.grey),
-                onPressed: () => _fetchMessages(),
-                tooltip: 'Aktualisieren',
+              TextButton(
+                onPressed: widget.onChangeGroup,
+                child: const Text('Gruppe wechseln', style: TextStyle(color: Colors.grey, fontSize: 11)),
               ),
             ],
           ),
@@ -114,13 +149,13 @@ class _HubScreenState extends State<HubScreen> {
                         children: [
                           Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey.shade700),
                           const SizedBox(height: 12),
-                          const Text(
-                            'Noch keine Nachrichten',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white70),
+                          Text(
+                            'Keine Nachrichten in "${service.currentGroupName ?? "Crew"}"',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white70),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Schreibe die erste Nachricht an deine Crew!',
+                            'Schreibe die erste Nachricht an deine Gruppe!',
                             style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                           ),
                         ],
@@ -132,7 +167,7 @@ class _HubScreenState extends State<HubScreen> {
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
                         final msg = _messages[index];
-                        final isMe = msg['author'] == currentUser;
+                        final isMe = msg['author'] == myName;
 
                         return Align(
                           alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -179,7 +214,7 @@ class _HubScreenState extends State<HubScreen> {
                     ),
         ),
 
-        // Bottom Input Field
+        // Input
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           color: const Color(0xFF0F1420),
@@ -192,7 +227,7 @@ class _HubScreenState extends State<HubScreen> {
                     controller: _msgController,
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'Nachricht eingeben...',
+                      hintText: 'Nachricht an "${service.currentGroupName ?? "Crew"}"...',
                       hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                       filled: true,
                       fillColor: const Color(0xFF161E2E),
@@ -209,11 +244,7 @@ class _HubScreenState extends State<HubScreen> {
                 IconButton(
                   onPressed: _isSending ? null : _sendMessage,
                   icon: _isSending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFA3)),
-                        )
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFA3)))
                       : const Icon(Icons.send_rounded, color: Color(0xFF00FFA3)),
                 ),
               ],
