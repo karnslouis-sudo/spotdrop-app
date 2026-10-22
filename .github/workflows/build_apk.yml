@@ -19,10 +19,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Set up Flutter (Latest Stable)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
 
@@ -31,8 +30,13 @@ jobs:
           rm -rf android
           flutter create . --platforms=android --org=com.spotdrop --project-name=spotdrop
 
-      - name: Add Permissions to AndroidManifest.xml
+      - name: Configure Kotlin 1.9.22 & Permissions
         run: |
+          # Upgrade Kotlin version in settings.gradle
+          sed -i 's/1.7.10/1.9.22/g' android/settings.gradle || true
+          sed -i 's/1.8.22/1.9.22/g' android/settings.gradle || true
+
+          # Permissions hinzufügen
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
