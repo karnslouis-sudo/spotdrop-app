@@ -26,42 +26,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Regenerate Native Android Scaffolding
+      - name: Clean and Regenerate Clean Android Project
         run: |
+          rm -rf android
           flutter create . --platforms=android --org=com.spotdrop --project-name=spotdrop
 
-      - name: Configure Android Permissions
+      - name: Add Permissions to AndroidManifest.xml
         run: |
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              <uses-permission android:name="android.permission.CAMERA"/>
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-              <application
-                  android:label="Spotdrop"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
-          EOF
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
         run: flutter pub get
