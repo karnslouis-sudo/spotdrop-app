@@ -3,7 +3,7 @@ name: Build Android Test APK
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # Ermöglicht manuellen 1-Klick Start auf GitHub
+  workflow_dispatch:
 
 jobs:
   build:
@@ -30,11 +30,11 @@ jobs:
         run: flutter pub get
 
       - name: Build APK (Release/Test)
-        run: flutter build apk --split-per-abi=false --no-tree-shake-icons
+        run: flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: spotdrop-test-apk
+          name: spotdrop-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
