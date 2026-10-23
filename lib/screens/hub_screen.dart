@@ -195,12 +195,6 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
       final temp = await getTemporaryDirectory();
       _currentRecordingPath = '${temp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-      const config = RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 64000,
-        sampleRate: 44100,
-      );
-
       await _audioRecorder.start(path: _currentRecordingPath!);
       setState(() {
         _isRecordingVoice = true;
