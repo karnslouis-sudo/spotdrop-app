@@ -19,7 +19,7 @@ class GitHubService {
   }
 
   // App & Backend Meta
-  static const String appVersion = "1.0.3";
+  static const String appVersion = "1.0.4";
   
   // 100% stabile OpenStreetMap Kacheln
   static const String openStreetMapTileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -64,8 +64,8 @@ class GitHubService {
     await _ensureFileExists('alerts.json', '[]');
     await _ensureFileExists('calls.json', '[]');
     await _ensureFileExists('version.json', jsonEncode({
-      'latest_version': '1.0.3',
-      'release_notes': 'Liquid Glass Design, Unfallerkennung SOS, VoIP Audio-Anrufe, OpenStreetMap & Snap-Vollbild/Löschen',
+      'latest_version': '1.0.4',
+      'release_notes': 'Swipe-to-Reply, System Push-Notifications, Design Personalisierung, Unfall-Löschen (Auto 48h) & Voice/Call Verbesserungen',
       'download_url': 'https://github.com/karnslouis-sudo/spotdrop-app/releases'
     }));
   }
@@ -108,7 +108,7 @@ class GitHubService {
   }
 
   // ==========================================================================
-  // NOTFALL & UNFALL-ERKENNUNG (SOS)
+  // NOTFALL & UNFALL-ERKENNUNG (SOS) - MIT LÖSCHUNG & AUTO-EXPIRATION (2 TAGE)
   // ==========================================================================
   Future<bool> broadcastEmergencyAlert({
     required double lat,
@@ -117,7 +117,6 @@ class GitHubService {
   }) async {
     if (_currentGroup == null) return false;
     
-    // 1. In alerts.json eintragen
     final file = await _getFile('alerts.json');
     final List list = file?['data'] ?? [];
     final String? sha = file?['sha'];
@@ -135,7 +134,6 @@ class GitHubService {
     list.insert(0, alertEntry);
     await _updateFile('alerts.json', list, sha, 'emergency: SOS alert from $_userName');
 
-    // 2. Sofort im Crew-Chat veröffentlichen mit Maps Link
     final mapsUrl = 'https://maps.google.com/?q=$lat,$lng';
     await sendChatMessage(
       '🚨 [NOTFALL/UNFALL-ALARM] $_userName hatte einen $details\n'
@@ -146,14 +144,59 @@ class GitHubService {
     return true;
   }
 
+  /// Holt Alarme und filtert / löscht automatisch alle, die älter als 2 Tage (48h) sind!
   Future<List<Map<String, dynamic>>> fetchEmergencyAlerts() async {
     if (_currentGroup == null) return [];
     final file = await _getFile('alerts.json');
     if (file != null && file['data'] is List) {
-      final all = List<Map<String, dynamic>>.from(file['data']);
-      return all.where((a) => a['group_code'] == currentGroupCode).toList();
+      final List all = file['data'];
+      final now = DateTime.now();
+
+      // Automatisches Bereinigen nach 2 Tagen (48 Stunden)
+      bool hasExpired = false;
+      final validAlerts = <Map<String, dynamic>>[];
+
+      for (final item in all) {
+        if (item is Map) {
+          final mapItem = Map<String, dynamic>.from(item);
+          final tsStr = mapItem['timestamp'] as String?;
+          final dt = DateTime.tryParse(tsStr ?? '');
+          if (dt != null && now.difference(dt).inHours >= 48) {
+            hasExpired = true; // Älter als 2 Tage -> verfällt automatisch!
+          } else {
+            validAlerts.add(mapItem);
+          }
+        }
+      }
+
+      if (hasExpired) {
+        // Bereinigte Liste asynchron auf GitHub sichern
+        _updateFile('alerts.json', validAlerts, file['sha'], 'emergency: auto-purge alerts older than 2 days');
+      }
+
+      return validAlerts.where((a) => a['group_code'] == currentGroupCode).toList();
     }
     return [];
+  }
+
+  /// Manuelles, handliches Löschen eines Unfall-Alarms (Entwarnung)
+  Future<bool> deleteEmergencyAlert(String alertId) async {
+    if (_currentGroup == null) return false;
+    final file = await _getFile('alerts.json');
+    final List list = file?['data'] ?? [];
+    final String? sha = file?['sha'];
+
+    final match = list.firstWhere((a) => a['id'] == alertId, orElse: () => null);
+    if (match != null) {
+      list.removeWhere((a) => a['id'] == alertId);
+      final ok = await _updateFile('alerts.json', list, sha, 'emergency: delete/resolve alert $alertId by $_userName');
+      if (ok) {
+        final who = match['user'] ?? 'Crew-Mitglied';
+        await sendChatMessage('✅ [Entwarnung] Der Unfall-Alarm von $who wurde als erledigt markiert und gelöscht.');
+      }
+      return ok;
+    }
+    return false;
   }
 
   // ==========================================================================
@@ -345,13 +388,9 @@ class GitHubService {
     return false;
   }
 
-  /// PERMANENTE LÖSCHUNG DER GRUPPE (Admin only):
-  /// Löscht die Gruppe aus groups.json, gibt Name & Code frei,
-  /// und vernichtet alle zugehörigen Fotos, Chats, Ausgaben und Spots auf GitHub!
   Future<bool> deleteGroupPermanently(String groupCode) async {
     if (!isGroupCreator && _currentGroup?['code'] != groupCode) return false;
 
-    // 1. Alle Fotos der Gruppe im Vault auf GitHub löschen
     final vaultFile = await _getFile('vault_index.json');
     if (vaultFile != null && vaultFile['data'] is List) {
       final List vaultList = vaultFile['data'];
@@ -367,7 +406,6 @@ class GitHubService {
       await _updateFile('vault_index.json', vaultList, vaultFile['sha'], 'vault: wipe photos of group $groupCode');
     }
 
-    // 2. Chat-Nachrichten bereinigen
     final chatFile = await _getFile('chat.json');
     if (chatFile != null && chatFile['data'] is List) {
       final List chatList = chatFile['data'];
@@ -375,7 +413,6 @@ class GitHubService {
       await _updateFile('chat.json', chatList, chatFile['sha'], 'chat: wipe messages of group $groupCode');
     }
 
-    // 3. Ausgaben (Expenses) bereinigen
     final expFile = await _getFile('expenses.json');
     if (expFile != null && expFile['data'] is List) {
       final List expList = expFile['data'];
@@ -383,7 +420,6 @@ class GitHubService {
       await _updateFile('expenses.json', expList, expFile['sha'], 'expenses: wipe expenses of group $groupCode');
     }
 
-    // 4. Standorte & Spots bereinigen
     final locFile = await _getFile('locations.json');
     if (locFile != null && locFile['data'] is List) {
       final List locList = locFile['data'];
@@ -398,7 +434,6 @@ class GitHubService {
       await _updateFile('drops.json', dropList, dropFile['sha'], 'drops: wipe spots of group $groupCode');
     }
 
-    // 5. Gruppe endgültig aus groups.json entfernen -> Name & Code frei!
     final groupFile = await _getFile('groups.json');
     if (groupFile != null && groupFile['data'] is List) {
       final List gList = groupFile['data'];
@@ -424,7 +459,7 @@ class GitHubService {
   }
 
   // ==========================================================================
-  // LIVE STANDORT & AKKU-TRACKING (LOCATIONS.JSON)
+  // LIVE STANDORT & AKKU-TRACKING
   // ==========================================================================
   Future<void> updateLocationAndBattery({
     required double lat,
@@ -528,7 +563,7 @@ class GitHubService {
   }
 
   // ==========================================================================
-  // CHAT BACKEND (MIT INLINE BILDERN & AUDIO)
+  // CHAT BACKEND (MIT INLINE BILDERN, AUDIO & SWIPE-TO-REPLY)
   // ==========================================================================
   Future<List<Map<String, dynamic>>> fetchChatMessages() async {
     if (_currentGroup == null) return [];
@@ -544,6 +579,7 @@ class GitHubService {
     String text, {
     Uint8List? imageBytes,
     String? audioNote,
+    Map<String, dynamic>? replyTo,
   }) async {
     if (_currentGroup == null) return false;
 
@@ -573,6 +609,7 @@ class GitHubService {
       'text': text,
       'image_url': imageUrl,
       'audio_note': audioNote,
+      'reply_to': replyTo,
       'timestamp': DateTime.now().toIso8601String(),
     };
 
@@ -647,12 +684,10 @@ class GitHubService {
     final rawUrl = snap['image_url'] as String? ?? '';
     final filename = rawUrl.split('/').last;
 
-    // Physische Datei im GitHub Repository löschen
     if (filename.isNotEmpty) {
       await _deleteFile('vault/$filename');
     }
 
-    // Aus dem Index entfernen
     list.removeAt(matchIndex);
     return await _updateFile('vault_index.json', list, sha, 'vault: delete snap $snapId');
   }
