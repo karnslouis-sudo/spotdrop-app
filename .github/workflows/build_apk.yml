@@ -137,33 +137,14 @@ jobs:
           plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
           plutil -insert NSMicrophoneUsageDescription -string "Spotdrop benötigt Zugriff auf das Mikrofon für VoIP Audio-Anrufe und Sprachnachrichten." ios/Runner/Info.plist || true
 
-          # Allow background audio playback and background location tracking
-          plutil -insert UIBackgroundModes -array ios/Runner/Info.plist || true
-          plutil -insert UIBackgroundModes.0 -string "audio" ios/Runner/Info.plist || true
-          plutil -insert UIBackgroundModes.1 -string "location" ios/Runner/Info.plist || true
+      - name: Disable Xcode Code Signing for Sideloading
+        run: |
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
 
       - name: Get Dependencies
         run: flutter pub get
-
-      - name: Configure iOS Podfile Deployment Target
-        run: |
-          cat << 'EOF' > fix_ios.py
-          import os
-          p = 'ios/Podfile'
-          if os.path.exists(p):
-              with open(p, 'r') as f:
-                  c = f.read()
-              c = c.replace("# platform :ios, '12.0'", "platform :ios, '13.0'")
-              c = c.replace("# platform :ios, '11.0'", "platform :ios, '13.0'")
-              c = c.replace("platform :ios, '12.0'", "platform :ios, '13.0'")
-              c = c.replace("platform :ios, '11.0'", "platform :ios, '13.0'")
-              if 'platform :ios' not in c:
-                  c = "platform :ios, '13.0'\n" + c
-              with open(p, 'w') as f:
-                  f.write(c)
-          print('Podfile deployment target set to 13.0')
-          EOF
-          python3 fix_ios.py
 
       - name: Build iOS App (Release No-Codesign)
         run: flutter build ios --release --no-codesign
