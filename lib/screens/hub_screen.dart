@@ -227,7 +227,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
       final path = await _audioRecorder.stop();
       final filePath = path ?? _currentRecordingPath;
       if (filePath != null) {
-        final file = File('${temp.path}/play_$msgId.m4a');
+        final file = File(filePath);
         if (await file.exists()) {
           final bytes = await file.readAsBytes();
           await _sendMessage(audioBytes: bytes, audioDuration: duration);
@@ -259,7 +259,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
 
       if (base64Audio != null && base64Audio.isNotEmpty) {
         final temp = await getTemporaryDirectory();
-        final file = File('${temp.path}/play_$msgId.m4a');
+        final file = File(filePath);
         await file.writeAsBytes(base64Decode(base64Audio));
         await _audioPlayer.play(DeviceFileSource(file.path));
       } else if (audioUrl != null && audioUrl.isNotEmpty) {
@@ -1048,7 +1048,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                     mainAxisSize: MainAxisSize.min,
                                                     children: [
                                                       Icon(
-                                                                ? '${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, "0")} / 0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")}'
+                                                        _currentlyPlayingAudioId == msgId ? Icons.pause_circle_filled : Icons.play_circle_filled,
                                                         color: isMe ? Colors.black : accent,
                                                         size: 26,
                                                       ),
@@ -1061,7 +1061,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                               for (int i = 0; i < 12; i++)
                                                                 Container(
                                                                   width: 3,
-                                                                ? '${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, "0")} / 0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")}'
+                                                                  height: (8 + (i % 4) * 4).toDouble(),
                                                                   margin: const EdgeInsets.symmetric(horizontal: 1.5),
                                                                   decoration: BoxDecoration(
                                                                     color: isMe ? Colors.black87 : Colors.white70,
@@ -1073,8 +1073,8 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                           const SizedBox(height: 3),
                                                           Text(
                                                             _currentlyPlayingAudioId == msgId
-                                                                ? "${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, '0')}"
-                                                                : 'Sprachnachricht (0:05)',
+                                                                ? '${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, "0")} / 0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")}'
+                                                                : 'Sprachnachricht (0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")})',
                                                             style: TextStyle(
                                                               fontSize: 9,
                                                               fontWeight: FontWeight.bold,
@@ -1087,7 +1087,6 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                   ),
                                                 ),
                                               ),
-
                                             if ((msg['text'] as String?)?.isNotEmpty == true)
                                               Text(msg['text'] ?? '', style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 13)),
                                           ],
