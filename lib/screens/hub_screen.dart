@@ -36,7 +36,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   bool _isSending = false;
   
   // Real Audio Voice Note State
-  final AudioRecorder _audioRecorder = AudioRecorder();
+  final Record _audioRecorder = Record();
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentRecordingPath;
   bool _isRecordingVoice = false;
@@ -101,7 +101,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text('🚫 Du wurdest vom Gruppen-Ersteller aus dieser Gruppe entfernt.'),
+          content: Text('ðŸš« Du wurdest vom Gruppen-Ersteller aus dieser Gruppe entfernt.'),
         ),
       );
       await service.setCurrentGroup(null);
@@ -122,7 +122,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     }
   }
 
-  Future<void> _sendMessage({Uint8List? imageBytes, String? audioNote}) async {
+  Future<void> _sendMessage({Uint8List? imageBytes, Uint8List? audioBytes, int? audioDuration, String? audioNote}) async {
     final text = _msgController.text.trim();
     if ((text.isEmpty && imageBytes == null && audioNote == null) || _isSending) return;
 
@@ -135,12 +135,14 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     if (text.isNotEmpty) _msgController.clear();
 
     final success = await GitHubService().sendChatMessage(
-      text.isNotEmpty ? text : (imageBytes != null ? '📷 Foto' : '🎙️ Sprachnachricht'),
+      text.isNotEmpty ? text : (imageBytes != null ? 'ðŸ“· Foto' : 'ðŸŽ™ï¸ Sprachnachricht'),
       imageBytes: imageBytes,
+      audioBytes: audioBytes,
+      audioDuration: audioDuration,
       audioNote: audioNote,
       replyTo: reply != null ? {
         'author': reply['author'],
-        'text': reply['text'] ?? (reply['image_url'] != null ? '📷 Foto' : '🎙️ Sprachmemo'),
+        'text': reply['text'] ?? (reply['image_url'] != null ? 'ðŸ“· Foto' : 'ðŸŽ™ï¸ Sprachmemo'),
       } : null,
     );
 
@@ -173,7 +175,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     } catch (_) {}
   }
 
-  // ECHTE MIKROFON-AUFNAHME FÜR SPRACHNACHRICHTEN
+  // ECHTE MIKROFON-AUFNAHME FÃœR SPRACHNACHRICHTEN
   Future<void> _startVoiceRecording() async {
     HapticFeedback.heavyImpact();
     try {
@@ -183,7 +185,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Colors.redAccent,
-              content: Text('⚠️ Mikrofon-Berechtigung erforderlich!'),
+              content: Text('âš ï¸ Mikrofon-Berechtigung erforderlich!'),
             ),
           );
         }
@@ -191,7 +193,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
       }
 
       final temp = await getTemporaryDirectory();
-      _currentRecordingPath = '$($temp.path)/voice_$(DateTime.now().millisecondsSinceEpoch).m4a';
+      _currentRecordingPath = '${temp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
       const config = RecordConfig(
         encoder: AudioEncoder.aacLc,
@@ -199,7 +201,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
         sampleRate: 44100,
       );
 
-      await _audioRecorder.start(config, path: _currentRecordingPath!);
+      await _audioRecorder.start(path: _currentRecordingPath!);
       setState(() {
         _isRecordingVoice = true;
         _voiceSeconds = 0;
@@ -231,7 +233,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
       final path = await _audioRecorder.stop();
       final filePath = path ?? _currentRecordingPath;
       if (filePath != null) {
-        final file = File(filePath);
+        final file = File('${temp.path}/play_$msgId.m4a');
         if (await file.exists()) {
           final bytes = await file.readAsBytes();
           await _sendMessage(audioBytes: bytes, audioDuration: duration);
@@ -263,7 +265,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
 
       if (base64Audio != null && base64Audio.isNotEmpty) {
         final temp = await getTemporaryDirectory();
-        final file = File('$($temp.path)/play_$msgId.m4a');
+        final file = File('${temp.path}/play_$msgId.m4a');
         await file.writeAsBytes(base64Decode(base64Audio));
         await _audioPlayer.play(DeviceFileSource(file.path));
       } else if (audioUrl != null && audioUrl.isNotEmpty) {
@@ -383,7 +385,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           ],
         ),
         content: Text(
-          'Möchtest du "$groupName" wirklich verlassen?\n\nDu verlierst Zugriff auf den Chat, die Spot-Map und alle Fotos im Tresor dieser Gruppe.',
+          'MÃ¶chtest du "$groupName" wirklich verlassen?\n\nDu verlierst Zugriff auf den Chat, die Spot-Map und alle Fotos im Tresor dieser Gruppe.',
           style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
         ),
         actions: [
@@ -434,16 +436,16 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'ACHTUNG: Dies löscht "$groupName" ($groupCode) UNWIDERRUFLICH!',
+              'ACHTUNG: Dies lÃ¶scht "$groupName" ($groupCode) UNWIDERRUFLICH!',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(height: 10),
             const Text(
               'Folgendes passiert auf dem GitHub-Server:\n'
-              '• Alle geteilten Fotos im Tresor werden physisch gelöscht\n'
-              '• Alle Chat-Nachrichten und Sprachmemos werden entfernt\n'
-              '• Alle Spot-Splits und GPS-Spots werden vernichtet\n'
-              '• Der Gruppenname & Code werden sofort wieder freigegeben!',
+              'â€¢ Alle geteilten Fotos im Tresor werden physisch gelÃ¶scht\n'
+              'â€¢ Alle Chat-Nachrichten und Sprachmemos werden entfernt\n'
+              'â€¢ Alle Spot-Splits und GPS-Spots werden vernichtet\n'
+              'â€¢ Der Gruppenname & Code werden sofort wieder freigegeben!',
               style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.5),
             ),
           ],
@@ -462,12 +464,12 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
             onPressed: () async {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Lösche Gruppe und vernichte alle GitHub-Dateien...')),
+                const SnackBar(content: Text('LÃ¶sche Gruppe und vernichte alle GitHub-Dateien...')),
               );
               await service.deleteGroupPermanently(groupCode);
               widget.onChangeGroup();
             },
-            child: const Text('Endgültig zerstören', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('EndgÃ¼ltig zerstÃ¶ren', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -555,7 +557,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                     ],
                                   ),
                                   Text(
-                                    isMemberCreator ? '👑 Ersteller' : 'Mitglied',
+                                    isMemberCreator ? 'ðŸ‘‘ Ersteller' : 'Mitglied',
                                     style: TextStyle(color: isMemberCreator ? Colors.amberAccent : Colors.grey.shade400, fontSize: 10),
                                   ),
                                 ],
@@ -600,7 +602,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                       _confirmPermanentGroupDeletion();
                     },
                     icon: const Icon(Icons.delete_forever, size: 20),
-                    label: const Text('Gruppe endgültig vernichten & Dateien löschen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: const Text('Gruppe endgÃ¼ltig vernichten & Dateien lÃ¶schen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ),
               ],
@@ -654,7 +656,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Gesamtbetrag:', style: TextStyle(color: Colors.grey)),
-                      Text('€ ${total.toStringAsFixed(2)}', style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text('â‚¬ ${total.toStringAsFixed(2)}', style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -670,7 +672,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Anteil pro Person:', style: TextStyle(color: Colors.grey)),
-                      Text('€ ${perPerson.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      Text('â‚¬ ${perPerson.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ],
@@ -701,11 +703,11 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   await GitHubService().deleteExpense(id);
                   await _pollUpdates();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Abrechnung beglichen und gelöscht!')),
+                    const SnackBar(content: Text('Abrechnung beglichen und gelÃ¶scht!')),
                   );
                 },
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Als beglichen markieren & löschen', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Als beglichen markieren & lÃ¶schen', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -747,7 +749,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     controller: titleController,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Wofür? (z.B. Pizza, Drinks, Benzin)',
+                      labelText: 'WofÃ¼r? (z.B. Pizza, Drinks, Benzin)',
                       filled: true,
                       fillColor: const Color(0xFF141926),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -759,8 +761,8 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Gesamtbetrag (€)',
-                      prefixText: '€ ',
+                      labelText: 'Gesamtbetrag (â‚¬)',
+                      prefixText: 'â‚¬ ',
                       filled: true,
                       fillColor: const Color(0xFF141926),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -814,7 +816,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                           }
                         }
                       },
-                      child: const Text('Rechnung gleichmäßig aufteilen', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text('Rechnung gleichmÃ¤ÃŸig aufteilen', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -904,8 +906,8 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
             unselectedLabelColor: Colors.white60,
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             tabs: [
-              Tab(text: '💬 Chat (${_messages.length})'),
-              Tab(text: '🧾 Spot-Split (${_expenses.length})'),
+              Tab(text: 'ðŸ’¬ Chat (${_messages.length})'),
+              Tab(text: 'ðŸ§¾ Spot-Split (${_expenses.length})'),
             ],
           ),
         ),
@@ -963,7 +965,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                     confirmDismiss: (direction) async {
                                       HapticFeedback.mediumImpact();
                                       setState(() => _replyingToMessage = msg);
-                                      return false; // Verhindert das Löschen der Nachricht!
+                                      return false; // Verhindert das LÃ¶schen der Nachricht!
                                     },
                                     background: Container(
                                       alignment: Alignment.centerLeft,
@@ -1052,7 +1054,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                     mainAxisSize: MainAxisSize.min,
                                                     children: [
                                                       Icon(
-                                                        _currentlyPlayingAudioId == msgId ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                                                ? '${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, "0")} / 0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")}'
                                                         color: isMe ? Colors.black : accent,
                                                         size: 26,
                                                       ),
@@ -1065,7 +1067,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                               for (int i = 0; i < 12; i++)
                                                                 Container(
                                                                   width: 3,
-                                                                  height: (_currentlyPlayingAudioId == msgId && i % 3 == 0) ? 16 : 8 + (i % 5 * 2).toDouble(),
+                                                                ? '${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, "0")} / 0:${(msg["audio_duration"] ?? 3).toString().padLeft(2, "0")}'
                                                                   margin: const EdgeInsets.symmetric(horizontal: 1.5),
                                                                   decoration: BoxDecoration(
                                                                     color: isMe ? Colors.black87 : Colors.white70,
@@ -1077,7 +1079,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                           const SizedBox(height: 3),
                                                           Text(
                                                             _currentlyPlayingAudioId == msgId
-                                                                ? '$(_audioPosition.inMinutes):$((_audioPosition.inSeconds % 60).toString().padLeft(2, '0')) / 0:$((msg['audio_duration'] ?? 3).toString().padLeft(2, '0'))'
+                                                                ? "${_audioPosition.inMinutes}:${(_audioPosition.inSeconds % 60).toString().padLeft(2, '0')}"
                                                                 : 'Sprachnachricht (0:05)',
                                                             style: TextStyle(
                                                               fontSize: 9,
@@ -1256,7 +1258,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(exp['title'] ?? 'Ausgabe', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                                          Text('€ ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: accent)),
+                                          Text('â‚¬ ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: accent)),
                                         ],
                                       ),
                                       const SizedBox(height: 4),
@@ -1266,7 +1268,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(10)),
                                         child: Text(
-                                          '€ ${perPerson.toStringAsFixed(2)} pro Kopf (${splitBetween.join(', ')}) • Antippen für Details',
+                                          'â‚¬ ${perPerson.toStringAsFixed(2)} pro Kopf (${splitBetween.join(', ')}) â€¢ Antippen fÃ¼r Details',
                                           style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                                         ),
                                       ),
@@ -1286,5 +1288,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 }
+
+
 
 
