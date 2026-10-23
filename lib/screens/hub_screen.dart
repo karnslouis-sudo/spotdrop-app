@@ -259,7 +259,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
 
       if (base64Audio != null && base64Audio.isNotEmpty) {
         final temp = await getTemporaryDirectory();
-        final file = File(filePath);
+        final file = File('${temp.path}/play_$msgId.m4a');
         await file.writeAsBytes(base64Decode(base64Audio));
         await _audioPlayer.play(DeviceFileSource(file.path));
       } else if (audioUrl != null && audioUrl.isNotEmpty) {
