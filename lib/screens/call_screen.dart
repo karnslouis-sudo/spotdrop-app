@@ -39,7 +39,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
   bool _hasConnected = false;
 
   // Live Push-To-Talk Voice Transmission
-  final AudioRecorder _voiceRecorder = AudioRecorder();
+  final Record _voiceRecorder = Record();
   final AudioPlayer _callAudioPlayer = AudioPlayer();
   bool _isTalking = false;
   String? _talkRecordingPath;
@@ -144,13 +144,9 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       final temp = await getTemporaryDirectory();
       _talkRecordingPath = '${temp.path}/ptt_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-      const config = RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 64000,
-        sampleRate: 44100,
-      );
 
-      await _voiceRecorder.start(config, path: _talkRecordingPath!);
+
+      await _voiceRecorder.start(path: _talkRecordingPath!);
       setState(() => _isTalking = true);
     } catch (_) {}
   }
@@ -443,3 +439,5 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     );
   }
 }
+
+
