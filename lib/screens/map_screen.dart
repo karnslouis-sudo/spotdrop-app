@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/github_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/glass_container.dart';
 import 'call_screen.dart';
 
@@ -16,9 +17,10 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   final Battery _battery = Battery();
+  late AnimationController _pulseController;
   
   LatLng _currentPosition = const LatLng(52.5200, 13.4050); // Fallback Berlin
   int _batteryLevel = 100;
@@ -31,12 +33,18 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
     _initMapData();
     _locationSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) => _syncPresence(silent: true));
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _locationSyncTimer?.cancel();
     super.dispose();
   }
@@ -99,13 +107,127 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // MODAL: UNFALL-ALARM DETAIL & MANUELLES LÖSCHEN
+  void _showAlertDetailModal(Map<String, dynamic> alert) {
+    final user = alert['user'] ?? 'SOS';
+    final details = alert['details'] ?? 'Unfall erkannt!';
+    final lat = (alert['lat'] as num?)?.toDouble() ?? 0.0;
+    final lng = (alert['lng'] as num?)?.toDouble() ?? 0.0;
+    final time = alert['timestamp'] ?? '';
+    final alertId = alert['id']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+        child: LiquidGlassCard(
+          borderRadius: 28,
+          borderColor: Colors.redAccent,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.redAccent.withOpacity(0.2),
+                      border: Border.all(color: Colors.redAccent, width: 2),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.emergency, color: Colors.redAccent, size: 28),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('🚨 UNFALL-NOTRUF: $user', style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 2),
+                        Text(details, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white60)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: const Color(0xFF1E1015), borderRadius: BorderRadius.circular(16)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('GPS Koordinaten:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text('$lat, $lng', style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () async {
+                        final uri = Uri.parse('https://maps.google.com/?q=$lat,$lng');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      icon: const Icon(Icons.directions, size: 18),
+                      label: const Text('Route öffnen', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        final ok = await GitHubService().deleteEmergencyAlert(alertId);
+                        if (ok) {
+                          await _syncPresence(silent: true);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('✅ Notfall wurde gelöscht / Entwarnung gegeben.')),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Entwarnung & Löschen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showMemberDetailModal(Map<String, dynamic> member) {
     final name = member['user'] ?? 'Crew-Mitglied';
     final battery = (member['battery'] as num?)?.toInt() ?? 100;
     final lat = (member['lat'] as num?)?.toDouble() ?? 0.0;
     final lng = (member['lng'] as num?)?.toDouble() ?? 0.0;
-    final updatedAt = member['updated_at'] as String?;
     final isLowBattery = battery <= 5;
+    final accent = ThemeService().accentColor;
 
     showModalBottomSheet(
       context: context,
@@ -115,12 +237,11 @@ class _MapScreenState extends State<MapScreen> {
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
         child: LiquidGlassCard(
           borderRadius: 28,
-          borderColor: isLowBattery ? Colors.redAccent.withOpacity(0.6) : const Color(0xFF00FFA3).withOpacity(0.4),
+          borderColor: isLowBattery ? Colors.redAccent.withOpacity(0.6) : accent.withOpacity(0.4),
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
               Row(
                 children: [
                   Container(
@@ -131,11 +252,11 @@ class _MapScreenState extends State<MapScreen> {
                       gradient: LinearGradient(
                         colors: isLowBattery 
                             ? [Colors.redAccent, Colors.orangeAccent]
-                            : [const Color(0xFF6366F1), const Color(0xFF00FFA3)],
+                            : [const Color(0xFF6366F1), accent],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: (isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3)).withOpacity(0.4),
+                          color: (isLowBattery ? Colors.redAccent : accent).withOpacity(0.4),
                           blurRadius: 14,
                         ),
                       ],
@@ -161,14 +282,14 @@ class _MapScreenState extends State<MapScreen> {
                           children: [
                             Icon(
                               isLowBattery ? Icons.battery_alert : Icons.battery_charging_full,
-                              color: isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3),
+                              color: isLowBattery ? Colors.redAccent : accent,
                               size: 14,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               '$battery% Akku ${isLowBattery ? "⚠️ KRITISCH" : "Normal"}',
                               style: TextStyle(
-                                color: isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3),
+                                color: isLowBattery ? Colors.redAccent : accent,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -188,7 +309,6 @@ class _MapScreenState extends State<MapScreen> {
               const Divider(color: Colors.white12),
               const SizedBox(height: 10),
 
-              // Standort Info
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -212,9 +332,9 @@ class _MapScreenState extends State<MapScreen> {
                         const Text('Status:', style: TextStyle(color: Colors.grey, fontSize: 12)),
                         Row(
                           children: [
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00FFA3), shape: BoxShape.circle)),
+                            Container(width: 8, height: 8, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
                             const SizedBox(width: 6),
-                            const Text('Live verbunden', style: TextStyle(color: Color(0xFF00FFA3), fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text('Live verbunden', style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ],
@@ -224,13 +344,12 @@ class _MapScreenState extends State<MapScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Action Buttons
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00FFA3),
+                        backgroundColor: accent,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -284,6 +403,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _promptAddSpot() async {
     final titleController = TextEditingController();
     bool isGeofenced = false;
+    final accent = ThemeService().accentColor;
 
     await showDialog(
       context: context,
@@ -291,11 +411,11 @@ class _MapScreenState extends State<MapScreen> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF121722),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: Colors.white.withOpacity(0.12))),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.add_location_alt, color: Color(0xFF00FFA3)),
-              SizedBox(width: 8),
-              Text('Neuen Spot droppen', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              Icon(Icons.add_location_alt, color: accent),
+              const SizedBox(width: 8),
+              const Text('Neuen Spot droppen', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           content: Column(
@@ -317,7 +437,7 @@ class _MapScreenState extends State<MapScreen> {
                 title: const Text('Geofenced Drop (Geheim)', style: TextStyle(color: Colors.white, fontSize: 13)),
                 subtitle: const Text('Erst im Radius vor Ort freischaltbar', style: TextStyle(color: Colors.grey, fontSize: 11)),
                 value: isGeofenced,
-                activeColor: const Color(0xFF00FFA3),
+                activeColor: accent,
                 onChanged: (val) => setDialogState(() => isGeofenced = val),
               ),
             ],
@@ -329,7 +449,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00FFA3), 
+                backgroundColor: accent, 
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -347,7 +467,7 @@ class _MapScreenState extends State<MapScreen> {
                     await _syncPresence(silent: true);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        backgroundColor: const Color(0xFF00FFA3),
+                        backgroundColor: accent,
                         content: Text('🎯 Spot "$title" auf der Map platziert!', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                       ),
                     );
@@ -366,12 +486,12 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final service = GitHubService();
     final myName = service.userName;
+    final accent = ThemeService().accentColor;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0D14),
       body: Stack(
         children: [
-          // OPENSTREETMAP (OFFIZIELLER KARTEN-PROVIDER)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -388,7 +508,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               MarkerLayer(
                 markers: [
-                  // 1. EIGENER STANDORT MIT AKKU-PILL
+                  // 1. EIGENER STANDORT MIT PULS-RING
                   Marker(
                     point: _currentPosition,
                     width: 76,
@@ -401,11 +521,11 @@ class _MapScreenState extends State<MapScreen> {
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.85),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFF00FFA3), width: 1),
+                            border: Border.all(color: accent, width: 1),
                           ),
                           child: Text(
                             'Du (${_batteryLevel}%)',
-                            style: const TextStyle(color: Color(0xFF00FFA3), fontSize: 9, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: accent, fontSize: 9, fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -413,11 +533,11 @@ class _MapScreenState extends State<MapScreen> {
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00FFA3),
+                            color: accent,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2.5),
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF00FFA3).withOpacity(0.7), blurRadius: 14, spreadRadius: 2),
+                              BoxShadow(color: accent.withOpacity(0.7), blurRadius: 14, spreadRadius: 2),
                             ],
                           ),
                           child: const Center(
@@ -428,7 +548,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
 
-                  // 2. STANDORTE DER ANDEREN MITGLIEDER (ANTIPPEND FÜR INFOS & ANRUF)
+                  // 2. STANDORTE DER ANDEREN MITGLIEDER
                   ..._memberLocations.where((m) => m['user'] != myName).map((member) {
                     final lat = (member['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (member['lng'] as num?)?.toDouble() ?? 0.0;
@@ -502,41 +622,42 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }),
 
-                  // 3. UNFALL / SOS BEACONS AUF DER KARTE
+                  // 3. UNFALL / SOS BEACONS AUF DER KARTE (MIT DETAIL-MODAL & LÖSCHEN)
                   ..._alerts.map((alert) {
                     final lat = (alert['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (alert['lng'] as num?)?.toDouble() ?? 0.0;
-                    final user = alert['user'] ?? 'SOS';
 
                     return Marker(
                       point: LatLng(lat, lng),
-                      width: 50,
-                      height: 50,
+                      width: 52,
+                      height: 52,
                       child: GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: Colors.redAccent,
-                              content: Text('🚨 NOTFALL-ORT von $user! Details: ${alert['details']}'),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: [
-                              BoxShadow(color: Colors.redAccent.withOpacity(0.8), blurRadius: 16, spreadRadius: 4),
-                            ],
-                          ),
-                          child: const Icon(Icons.emergency, color: Colors.white, size: 24),
+                        onTap: () => _showAlertDetailModal(alert),
+                        child: AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, child) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.redAccent.withOpacity(0.4 + (_pulseController.value * 0.5)),
+                                    blurRadius: 12 + (_pulseController.value * 12),
+                                    spreadRadius: 2 + (_pulseController.value * 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.emergency, color: Colors.white, size: 24),
+                            );
+                          },
                         ),
                       ),
                     );
                   }),
 
-                  // 4. SPOTS & DROPS DER GRUPPE
+                  // 4. SPOTS DER GRUPPE
                   ..._spots.map((spot) {
                     final lat = (spot['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (spot['lng'] as num?)?.toDouble() ?? 0.0;
@@ -554,12 +675,12 @@ class _MapScreenState extends State<MapScreen> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            color: isGeo ? Colors.amber : const Color(0xFF00FFA3),
+                            color: isGeo ? Colors.amber : accent,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.black, width: 2),
                             boxShadow: [
                               BoxShadow(
-                                color: (isGeo ? Colors.amber : const Color(0xFF00FFA3)).withOpacity(0.4),
+                                color: (isGeo ? Colors.amber : accent).withOpacity(0.4),
                                 blurRadius: 8,
                               ),
                             ],
@@ -578,7 +699,7 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // TOP LIQUID GLASS STATUS PILL
+          // TOP STATUS PILL
           Positioned(
             top: 40,
             left: 16,
@@ -594,8 +715,8 @@ class _MapScreenState extends State<MapScreen> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF00FFA3),
+                        decoration: BoxDecoration(
+                          color: accent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -618,7 +739,7 @@ class _MapScreenState extends State<MapScreen> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.my_location, color: Color(0xFF00FFA3), size: 18),
+                        icon: Icon(Icons.my_location, color: accent, size: 18),
                         onPressed: () => _mapController.move(_currentPosition, 15.5),
                         tooltip: 'Mein Standort',
                         padding: EdgeInsets.zero,
@@ -639,7 +760,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // BOTTOM LIQUID GLASS ACTION BUTTON (ABGEHOBEN, KEINE ÜBERLAPPUNG MIT BOTTOM NAV!)
+          // BOTTOM ACTION BUTTON
           Positioned(
             bottom: 96,
             left: 20,
@@ -655,7 +776,7 @@ class _MapScreenState extends State<MapScreen> {
                   style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FFA3),
+                  backgroundColor: accent,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
