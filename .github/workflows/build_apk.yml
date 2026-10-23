@@ -42,10 +42,10 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Configure Gradle & Fix Subproject Namespaces (AGP 8+)
+      - name: Configure Gradle & Fix AGP 8 Namespaces
         run: |
           cat << 'EOF' > fix_build.py
-          import os
+          import os, re
 
           # 1. Update Kotlin in settings.gradle
           for p in ['android/settings.gradle', 'android/settings.gradle.kts']:
@@ -78,25 +78,35 @@ jobs:
                   with open(p, 'w') as f:
                       f.write(c)
 
-          # 3. Fix namespace in pub-cache plugins (e.g. record-4.4.4) for AGP 8
+          # 3. Fix namespace & remove package attribute in pub-cache plugins for AGP 8
           pub_cache = os.path.expanduser('~/.pub-cache')
           if os.path.exists(pub_cache):
               for root, dirs, files in os.walk(pub_cache):
-                  for file in files:
-                      if file == 'build.gradle':
-                          gp = os.path.join(root, file)
-                          try:
-                              with open(gp, 'r') as f:
-                                  gc = f.read()
-                              if 'android {' in gc and 'namespace' not in gc:
-                                  parent = os.path.basename(os.path.dirname(os.path.dirname(gp)))
-                                  ns = 'com.spotdrop.' + parent.split('-')[0].replace('.', '_')
-                                  print(f'Injecting namespace {ns} into {gp}')
-                                  gc = gc.replace('android {', f"android {{\n    namespace '{ns}'")
-                                  with open(gp, 'w') as f:
-                                      f.write(gc)
-                          except Exception as ex:
-                              print(f'Error reading {gp}: {ex}')
+                  if 'AndroidManifest.xml' in files:
+                      mp = os.path.join(root, 'AndroidManifest.xml')
+                      try:
+                          with open(mp, 'r') as f:
+                              mc = f.read()
+                          pkg_match = re.search(r'package="([^"]+)"', mc)
+                          if pkg_match:
+                              pkg = pkg_match.group(1)
+                              print(f'Found package {pkg} in {mp}')
+                              mc = re.sub(r'\s*package="[^"]+"', '', mc)
+                              with open(mp, 'w') as f:
+                                  f.write(mc)
+                              
+                              # Look for corresponding build.gradle
+                              bp = os.path.abspath(os.path.join(root, '..', '..', 'build.gradle'))
+                              if os.path.exists(bp):
+                                  with open(bp, 'r') as f:
+                                      bc = f.read()
+                                  if 'android {' in bc and 'namespace' not in bc:
+                                      print(f'Adding namespace {pkg} to {bp}')
+                                      bc = bc.replace('android {', f"android {{\n    namespace '{pkg}'")
+                                      with open(bp, 'w') as f:
+                                          f.write(bc)
+                      except Exception as ex:
+                          print(f'Error patching {mp}: {ex}')
 
           print('Successfully patched Android build files!')
           EOF
