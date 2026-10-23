@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-class GlassContainer extends StatelessWidget {
+class LiquidGlassCard extends StatelessWidget {
   final Widget child;
   final double? width;
   final double? height;
@@ -12,14 +12,14 @@ class GlassContainer extends StatelessWidget {
   final Color? backgroundColor;
   final VoidCallback? onTap;
 
-  const GlassContainer({
+  const LiquidGlassCard({
     super.key,
     required this.child,
     this.width,
     this.height,
     this.padding,
     this.margin,
-    this.borderRadius = 22.0,
+    this.borderRadius = 24.0,
     this.borderColor,
     this.backgroundColor,
     this.onTap,
@@ -27,30 +27,46 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget content = Container(
+    Widget card = Container(
       width: width,
       height: height,
       margin: margin,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.45),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: const Color(0xFF00FFA3).withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            padding: padding,
+            padding: padding ?? const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: backgroundColor ?? const Color(0xFF121722).withOpacity(0.68),
+              color: backgroundColor ?? const Color(0xFF101624).withOpacity(0.72),
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
-                color: borderColor ?? Colors.white.withOpacity(0.12),
+                color: borderColor ?? Colors.white.withOpacity(0.18),
                 width: 1.2,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.12),
+                  Colors.white.withOpacity(0.02),
+                ],
+              ),
             ),
             child: child,
           ),
@@ -61,9 +77,12 @@ class GlassContainer extends StatelessWidget {
     if (onTap != null) {
       return GestureDetector(
         onTap: onTap,
-        child: content,
+        child: card,
       );
     }
-    return content;
+    return card;
   }
 }
+
+// Alias für Rückwärtskompatibilität
+typedef GlassContainer = LiquidGlassCard;
