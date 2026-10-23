@@ -137,11 +137,26 @@ jobs:
           plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
           plutil -insert NSMicrophoneUsageDescription -string "Spotdrop benötigt Zugriff auf das Mikrofon für VoIP Audio-Anrufe und Sprachnachrichten." ios/Runner/Info.plist || true
 
-      - name: Disable Xcode Code Signing for Sideloading
+      - name: Disable Xcode Code Signing Requirement (Manual Sideload Mode)
         run: |
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          python3 -c "
+          import os
+          proj = 'ios/Runner.xcodeproj/project.pbxproj'
+          if os.path.exists(proj):
+              with open(proj, 'r') as f:
+                  c = f.read()
+              c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
+              c = c.replace('CODE_SIGNING_REQUIRED = YES;', 'CODE_SIGNING_REQUIRED = NO;')
+              c = c.replace('CODE_SIGN_IDENTITY = \"iPhone Developer\";', 'CODE_SIGN_IDENTITY = \"\"; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO;')
+              with open(proj, 'w') as f:
+                  f.write(c)
+
+          xc = 'ios/Flutter/Release.xcconfig'
+          if os.path.exists(xc):
+              with open(xc, 'a') as f:
+                  f.write('\nCODE_SIGNING_ALLOWED=NO\nCODE_SIGNING_REQUIRED=NO\nCODE_SIGN_IDENTITY=\n')
+          print('Successfully configured unsigned iOS settings!')
+          "
 
       - name: Get Dependencies
         run: flutter pub get
