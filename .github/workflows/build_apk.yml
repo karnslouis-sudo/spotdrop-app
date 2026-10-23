@@ -1,8 +1,8 @@
-name: Build Android APK and iOS IPA
+﻿name: Spotdrop CI - Build APK & IPA
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Java Development Kit (JDK 17)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
       - name: Set up Flutter (Latest Stable)
@@ -31,7 +31,7 @@ jobs:
 
       - name: Configure Kotlin, Core Desugaring & Permissions
         run: |
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml || true
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml || true
           python3 -c "
           import os
           for p in ['android/settings.gradle', 'android/settings.gradle.kts']:
@@ -46,6 +46,11 @@ jobs:
               if os.path.exists(p):
                   with open(p, 'r') as f:
                       c = f.read()
+                  # Ensure minSdk is 23 for record package
+                  c = c.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 23')
+                  c = c.replace('minSdkVersion 21', 'minSdkVersion 23')
+                  c = c.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+                  c = c.replace('minSdk = 21', 'minSdk = 23')
                   if p.endswith('.kts'):
                       if 'isCoreLibraryDesugaringEnabled' not in c:
                           c = c.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
@@ -91,7 +96,7 @@ jobs:
           rm -rf ios
           flutter create . --platforms=ios --org=com.spotdrop --project-name=spotdrop
 
-      - name: Configure iOS Permissions in Info.plist
+      - name: Configure iOS Permissions & Background Modes in Info.plist
         run: |
           plutil -insert NSCameraUsageDescription -string "Spotdrop benötigt Zugriff auf die Kamera für den Snap-Vault." ios/Runner/Info.plist || true
           plutil -insert NSLocationWhenInUseUsageDescription -string "Spotdrop benötigt deinen Standort für die Spot-Map." ios/Runner/Info.plist || true
@@ -99,8 +104,35 @@ jobs:
           plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
           plutil -insert NSMicrophoneUsageDescription -string "Spotdrop benötigt Zugriff auf das Mikrofon für VoIP Audio-Anrufe und Sprachnachrichten." ios/Runner/Info.plist || true
 
+          # Background Modes for VoIP, Audio, Location, Fetch, Remote Notification
+          plutil -insert UIBackgroundModes -array ios/Runner/Info.plist || true
+          plutil -insert UIBackgroundModes.0 -string "audio" ios/Runner/Info.plist || true
+          plutil -insert UIBackgroundModes.1 -string "location" ios/Runner/Info.plist || true
+          plutil -insert UIBackgroundModes.2 -string "voip" ios/Runner/Info.plist || true
+          plutil -insert UIBackgroundModes.3 -string "fetch" ios/Runner/Info.plist || true
+          plutil -insert UIBackgroundModes.4 -string "remote-notification" ios/Runner/Info.plist || true
+
       - name: Get Dependencies
         run: flutter pub get
+
+      - name: Configure iOS Podfile Deployment Target
+        run: |
+          python3 -c "
+          import os
+          p = 'ios/Podfile'
+          if os.path.exists(p):
+              with open(p, 'r') as f:
+                  c = f.read()
+              c = c.replace('# platform :ios, \'12.0\'', 'platform :ios, \'13.0\'')
+              c = c.replace('# platform :ios, \'11.0\'', 'platform :ios, \'13.0\'')
+              c = c.replace('platform :ios, \'12.0\'', 'platform :ios, \'13.0\'')
+              c = c.replace('platform :ios, \'11.0\'', 'platform :ios, \'13.0\'')
+              if 'platform :ios' not in c:
+                  c = 'platform :ios, \'13.0\'\n' + c
+              with open(p, 'w') as f:
+                  f.write(c)
+              print('iOS Podfile target set to 13.0')
+          "
 
       - name: Build iOS App (Release No-Codesign)
         run: flutter build ios --release --no-codesign
