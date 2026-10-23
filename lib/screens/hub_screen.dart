@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -173,52 +173,105 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     } catch (_) {}
   }
 
-  // ECHTE SPRACHNOTIZEN AUFNAHME MIT SEKUNDEN-COUNTER
-  void _startVoiceRecording() {
+  // ECHTE MIKROFON-AUFNAHME FÜR SPRACHNACHRICHTEN
+  Future<void> _startVoiceRecording() async {
     HapticFeedback.heavyImpact();
-    setState(() {
-      _isRecordingVoice = true;
-      _voiceSeconds = 0;
-    });
-    _voiceTimer?.cancel();
-    _voiceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _voiceSeconds++);
-    });
+    try {
+      final hasPerm = await _audioRecorder.hasPermission();
+      if (!hasPerm) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('⚠️ Mikrofon-Berechtigung erforderlich!'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final temp = await getTemporaryDirectory();
+      _currentRecordingPath = '$($temp.path)/voice_$(DateTime.now().millisecondsSinceEpoch).m4a';
+
+      const config = RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 64000,
+        sampleRate: 44100,
+      );
+
+      await _audioRecorder.start(config, path: _currentRecordingPath!);
+      setState(() {
+        _isRecordingVoice = true;
+        _voiceSeconds = 0;
+      });
+
+      _voiceTimer?.cancel();
+      _voiceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _voiceSeconds++);
+      });
+    } catch (e) {
+      debugPrint('Error starting audio recorder: $e');
+    }
   }
 
-  void _cancelVoiceRecording() {
+  Future<void> _cancelVoiceRecording() async {
     _voiceTimer?.cancel();
+    try {
+      await _audioRecorder.stop();
+    } catch (_) {}
     setState(() => _isRecordingVoice = false);
   }
 
   Future<void> _finishAndSendVoiceRecording() async {
     _voiceTimer?.cancel();
-    final duration = _voiceSeconds > 0 ? _voiceSeconds : 3;
+    final duration = _voiceSeconds > 0 ? _voiceSeconds : 1;
     setState(() => _isRecordingVoice = false);
 
-    await _sendMessage(audioNote: 'audio_${duration}s');
+    try {
+      final path = await _audioRecorder.stop();
+      final filePath = path ?? _currentRecordingPath;
+      if (filePath != null) {
+        final file = File(filePath);
+        if (await file.exists()) {
+          final bytes = await file.readAsBytes();
+          await _sendMessage(audioBytes: bytes, audioDuration: duration);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error stopping audio recorder: $e');
+    }
   }
 
-  // SPRACHNACHRICHT ABSPIELEN MIT ANIMATION & PROGRESS
-  void _togglePlayAudio(String msgId) {
+  // ECHTES ABSPIELEN MIT SOUND AUS DEM LAUTSPRECHER
+  Future<void> _togglePlayAudio(Map<String, dynamic> msg) async {
+    final msgId = msg['id']?.toString() ?? '';
     if (_currentlyPlayingAudioId == msgId) {
-      _playbackTimer?.cancel();
+      await _audioPlayer.stop();
       setState(() => _currentlyPlayingAudioId = null);
-    } else {
-      _playbackTimer?.cancel();
-      setState(() {
-        _currentlyPlayingAudioId = msgId;
-        _audioPlaybackSeconds = 0;
-      });
+      return;
+    }
 
-      _playbackTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (_audioPlaybackSeconds >= 5) {
-          timer.cancel();
-          if (mounted) setState(() => _currentlyPlayingAudioId = null);
-        } else {
-          if (mounted) setState(() => _audioPlaybackSeconds++);
-        }
-      });
+    await _audioPlayer.stop();
+    setState(() {
+      _currentlyPlayingAudioId = msgId;
+      _audioPosition = Duration.zero;
+    });
+
+    try {
+      final base64Audio = msg['audio_base64'] as String?;
+      final audioUrl = msg['audio_url'] as String?;
+
+      if (base64Audio != null && base64Audio.isNotEmpty) {
+        final temp = await getTemporaryDirectory();
+        final file = File('$($temp.path)/play_$msgId.m4a');
+        await file.writeAsBytes(base64Decode(base64Audio));
+        await _audioPlayer.play(DeviceFileSource(file.path));
+      } else if (audioUrl != null && audioUrl.isNotEmpty) {
+        await _audioPlayer.play(UrlSource(audioUrl));
+      }
+    } catch (e) {
+      debugPrint('Error playing voice note: $e');
+      if (mounted) setState(() => _currentlyPlayingAudioId = null);
     }
   }
 
@@ -1024,7 +1077,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                                           const SizedBox(height: 3),
                                                           Text(
                                                             _currentlyPlayingAudioId == msgId
-                                                                ? '0:0$_audioPlaybackSeconds / 0:05'
+                                                                ? '$(_audioPosition.inMinutes):$((_audioPosition.inSeconds % 60).toString().padLeft(2, '0')) / 0:$((msg['audio_duration'] ?? 3).toString().padLeft(2, '0'))'
                                                                 : 'Sprachnachricht (0:05)',
                                                             style: TextStyle(
                                                               fontSize: 9,
