@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -265,15 +265,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       }
     } catch (_) {}
 
-    // 2. EINGEHENDE ANRUFE (VOIP)
+        // 2. EINGEHENDE ANRUFE (VOIP & KLINGELN)
     try {
       final call = await service.checkIncomingCall();
       if (call != null && _activeIncomingCallId != call['id']) {
         _activeIncomingCallId = call['id'];
         final caller = call['caller'] ?? 'Jemand';
 
-        // System Notification für Anruf
-        await NotificationService().showIncomingCallNotification(
+        // Klingeln, Vibration & Notification starten!
+        await NotificationService().startIncomingCallRing(
           caller: caller,
           callId: call['id'],
         );
@@ -292,15 +292,17 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                 children: [
                   Icon(Icons.phone_in_talk, color: ThemeService().accentColor),
                   const SizedBox(width: 8),
-                  Text('$caller ruft an...', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(' ruft an...', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
-              content: Text('$caller startet einen Spotdrop VoIP Crew-Anruf.', style: const TextStyle(color: Colors.white70)),
+              content: Text(' startet einen Spotdrop VoIP Crew-Anruf.', style: const TextStyle(color: Colors.white70)),
               actions: [
                 TextButton.icon(
                   onPressed: () async {
                     Navigator.pop(ctx);
+                    await NotificationService().stopIncomingCallRing();
                     await service.endCall(call['id']);
+                    _activeIncomingCallId = null;
                   },
                   icon: const Icon(Icons.call_end, color: Colors.redAccent),
                   label: const Text('Ablehnen', style: TextStyle(color: Colors.redAccent)),
@@ -312,12 +314,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                   ),
                   onPressed: () async {
                     Navigator.pop(ctx);
+                    await NotificationService().stopIncomingCallRing();
                     await service.answerCall(call['id']);
                     if (mounted) {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => CallScreen(
+                            callId: call['id'],
                             callerName: caller,
                             isIncoming: true,
                             onEndCall: () => Navigator.pop(context),
@@ -333,6 +337,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
             ),
           );
         }
+      } else if (call == null && _activeIncomingCallId != null) {
+        // Anruf wurde vom Anrufer abgebrochen
+        await NotificationService().stopIncomingCallRing();
+        _activeIncomingCallId = null;
       }
     } catch (_) {}
 
@@ -783,3 +791,5 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 }
+
+
