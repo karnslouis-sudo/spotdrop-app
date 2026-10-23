@@ -3,116 +3,370 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Spotdrop - Liquid Glass Edition (v1.0.4)</title>
+  <title>Spotdrop - Liquid Glass Edition (v1.0.5)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
     :root {
       --accent: #00FFA3;
+      --accent-cyan: #00E5FF;
+      --accent-grad: linear-gradient(135deg, #00FFA3 0%, #00E5FF 100%);
+      --space-grey-bg: #07090E;
+      --space-grey-card: rgba(16, 22, 34, 0.72);
+      --space-grey-border: rgba(255, 255, 255, 0.12);
+      --glow-shadow: 0 0 24px rgba(0, 255, 163, 0.4);
     }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: -0.015em;
+    }
+
+    /* Custom Scrollbars */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #080B11; }
-    ::-webkit-scrollbar-thumb { background: #1E2638; border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 163, 0.4); }
+
+    /* Glassmorphism Classes */
     .liquid-glass {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)), rgba(16, 22, 36, 0.72);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(13, 18, 28, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.55), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
     }
+
     .obsidian-glass {
-      background: rgba(6, 9, 15, 0.92);
+      background: rgba(5, 7, 12, 0.88);
       backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
     }
+
     .neon-glass {
-      background: rgba(12, 18, 29, 0.85);
-      backdrop-filter: blur(20px);
+      background: rgba(10, 15, 24, 0.82);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       border: 1.5px solid var(--accent);
-      box-shadow: 0 0 25px rgba(0, 255, 163, 0.2), 0 12px 40px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 0 25px rgba(0, 255, 163, 0.25), 0 12px 40px rgba(0, 0, 0, 0.75);
     }
+
     .glass-pill {
-      background: rgba(22, 30, 48, 0.75);
+      background: rgba(25, 34, 52, 0.65);
       backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
-    #leaflet-map { width: 100%; height: 100%; z-index: 10; background: #0A0D14; }
+    .glass-pill:hover {
+      background: rgba(35, 48, 74, 0.8);
+      border-color: rgba(255, 255, 255, 0.28);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Instagram Story Gradient Ring */
+    .story-ring {
+      position: relative;
+      display: inline-flex;
+      padding: 2.2px;
+      border-radius: 9999px;
+      background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      box-shadow: 0 0 10px rgba(220, 39, 67, 0.4);
+    }
+    .story-ring-inner {
+      border-radius: 9999px;
+      border: 2px solid #080B11;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .story-ring-active {
+      background: var(--accent-grad);
+      box-shadow: 0 0 14px rgba(0, 255, 163, 0.55);
+    }
+
+    /* Floating Pill Segmented Toggle (Liquid Slider) */
+    .liquid-segment-container {
+      position: relative;
+      display: flex;
+      background: rgba(16, 22, 34, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
+      padding: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    }
+    .liquid-segment-slider {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 4px;
+      width: calc(50% - 4px);
+      border-radius: 9999px;
+      background: var(--accent-grad);
+      box-shadow: 0 0 20px rgba(0, 255, 163, 0.45), 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1.15);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Floating Bottom Nav Liquid Slider */
+    .bottom-nav-container {
+      position: relative;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 16, 25, 0.78);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+      padding: 5px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+    }
+    .bottom-nav-slider {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      left: 5px;
+      width: calc(33.333% - 3.33px);
+      border-radius: 9999px;
+      background: var(--accent-grad);
+      box-shadow: 0 0 22px rgba(0, 255, 163, 0.45), 0 4px 16px rgba(0, 0, 0, 0.3);
+      transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1.18);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Snapchat Shutter Button */
+    .snap-shutter {
+      width: 48px;
+      height: 48px;
+      border-radius: 9999px;
+      border: 3.5px solid var(--accent);
+      padding: 3.5px;
+      background: transparent;
+      box-shadow: 0 0 20px rgba(0, 255, 163, 0.35);
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .snap-shutter-circle {
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .snap-shutter:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 28px rgba(0, 255, 163, 0.55);
+    }
+    .snap-shutter:active .snap-shutter-circle {
+      transform: scale(0.85);
+      background: var(--accent);
+    }
+
+    /* Gallery Snap Cards with 3D Scale & Inner Glow */
+    .snap-card {
+      position: relative;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 0 16px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.55);
+      transform-style: preserve-3d;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1.1), box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+    .snap-card:hover {
+      transform: translateY(-4px) scale(1.03);
+      border-color: rgba(0, 255, 163, 0.5);
+      box-shadow: inset 0 0 20px rgba(0, 255, 163, 0.2), 0 16px 36px rgba(0, 0, 0, 0.7);
+    }
+    .snap-card:active {
+      transform: scale(0.95);
+    }
+
+    /* Waterdrop Bounce & Shockwave Animation */
+    @keyframes waterDropIn {
+      0% {
+        opacity: 0;
+        transform: translateY(-80px) scale(0.4) scaleY(1.4);
+      }
+      60% {
+        opacity: 1;
+        transform: translateY(12px) scale(1.08) scaleY(0.92);
+      }
+      80% {
+        transform: translateY(-5px) scale(0.97) scaleY(1.03);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1) scaleY(1);
+      }
+    }
+
+    @keyframes shockwave {
+      0% {
+        transform: scale(0.8);
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(0, 255, 163, 0.8);
+      }
+      100% {
+        transform: scale(1.6);
+        opacity: 0;
+        box-shadow: 0 0 45px 35px rgba(0, 255, 163, 0);
+      }
+    }
+
+    .waterdrop-animated {
+      animation: waterDropIn 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .shockwave-ripple {
+      position: absolute;
+      inset: -4px;
+      border-radius: 24px;
+      pointer-events: none;
+      animation: shockwave 0.85s ease-out forwards;
+    }
+
+    /* Elastic Bounce for Send / Buttons */
+    @keyframes elasticScale {
+      0% { transform: scale(1); }
+      35% { transform: scale(0.82); }
+      70% { transform: scale(1.14); }
+      100% { transform: scale(1); }
+    }
+    .btn-elastic:active {
+      animation: elasticScale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    /* Dynamic Waveform Visualizer */
+    .waveform-bar {
+      width: 2.5px;
+      border-radius: 9999px;
+      transition: height 0.2s ease, background-color 0.2s ease;
+    }
+    @keyframes waveDance {
+      0% { height: 4px; }
+      50% { height: 18px; }
+      100% { height: 6px; }
+    }
+    .waveform-active-0 { animation: waveDance 0.75s infinite ease-in-out; }
+    .waveform-active-1 { animation: waveDance 0.6s infinite ease-in-out 0.1s; }
+    .waveform-active-2 { animation: waveDance 0.85s infinite ease-in-out 0.2s; }
+    .waveform-active-3 { animation: waveDance 0.5s infinite ease-in-out 0.3s; }
+    .waveform-active-4 { animation: waveDance 0.7s infinite ease-in-out 0.15s; }
+    .waveform-active-5 { animation: waveDance 0.9s infinite ease-in-out 0.25s; }
+
+    /* Input Focus Glow */
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 2px rgba(0, 255, 163, 0.25), 0 0 20px rgba(0, 255, 163, 0.3) !important;
+    }
+
+    #leaflet-map { width: 100%; height: 100%; z-index: 10; background: #07090E; }
     .leaflet-control-attribution { display: none !important; }
+
     @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.15); opacity: 0.3; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.95); opacity: 0.85; }
+      50% { transform: scale(1.18); opacity: 0.25; }
+      100% { transform: scale(0.95); opacity: 0.85; }
     }
     .pulse-ring { animation: pulse-ring 2s infinite ease-in-out; }
-    .swipe-reply {
-      touch-action: pan-y;
-      transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
   </style>
 </head>
-<body class="bg-[#04060A] text-slate-100 antialiased min-h-screen flex items-center justify-center p-2 sm:p-6 select-none font-sans">
+<body class="bg-[#030508] text-slate-100 antialiased min-h-screen flex items-center justify-center p-2 sm:p-6 select-none font-sans">
 
-  <!-- Mobile Device Frame Container -->
-  <div id="device-shell" class="relative w-full max-w-[420px] h-[870px] max-h-[96vh] bg-[#080B11] rounded-[46px] border-[6px] border-[#1E2738] shadow-[0_30px_90px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden">
+  <!-- Mobile Device Shell Frame Container -->
+  <div id="device-shell" class="relative w-full max-w-[420px] h-[870px] max-h-[96vh] bg-[#07090E] rounded-[46px] border-[5px] border-[#182030] shadow-[0_30px_90px_rgba(0,0,0,0.98),0_0_50px_rgba(0,255,163,0.06)] flex flex-col overflow-hidden">
     
     <!-- Status Bar -->
-    <div class="h-8 bg-[#080B11] flex items-center justify-between px-7 shrink-0 text-xs text-slate-400 font-mono z-40">
-      <span id="live-time">12:35</span>
+    <div class="h-8 bg-[#07090E] flex items-center justify-between px-7 shrink-0 text-xs text-slate-400 font-mono z-40 border-b border-white/5">
+      <span id="live-time" class="font-semibold text-slate-300">12:35</span>
       <div class="w-20 h-4 bg-black rounded-b-xl flex items-center justify-center">
         <div class="w-2.5 h-2.5 rounded-full bg-slate-800"></div>
       </div>
       <div class="flex items-center space-x-1.5 text-[10px]">
-        <span id="badge-version" class="font-bold" style="color: var(--accent)">● v1.0.4</span>
-        <span>Akku 92%</span>
+        <span id="badge-version" class="font-bold flex items-center gap-1" style="color: var(--accent)">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3] animate-pulse"></span> v1.0.5
+        </span>
+        <span class="text-slate-400">92%</span>
       </div>
     </div>
 
     <!-- App Header (Liquid Glass) -->
-    <div class="px-4 py-2.5 bg-[#0F1420]/85 backdrop-blur-md border-b border-white/10 flex items-center justify-between shrink-0 z-30">
-      <div class="flex items-center space-x-2">
-        <div id="app-logo" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#00FFA3] flex items-center justify-center font-bold text-xs text-black shadow-lg">
-          SD
+    <div class="px-4 py-2.5 liquid-glass border-b border-white/10 flex items-center justify-between shrink-0 z-30">
+      <div class="flex items-center space-x-2.5">
+        <!-- Story Ring Logo Avatar -->
+        <div class="story-ring story-ring-active shrink-0">
+          <div class="story-ring-inner">
+            <div id="app-logo" class="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00FFA3] to-[#00E5FF] flex items-center justify-center font-extrabold text-[11px] text-black shadow-md">
+              SD
+            </div>
+          </div>
         </div>
         <div>
-          <span class="font-bold text-sm text-white tracking-tight" id="header-group-name">Berlin Nightout</span>
-          <p class="text-[10px] font-mono" id="header-user-status" style="color: var(--accent)">Louis (Du) • SD-77K1</p>
+          <span class="font-extrabold text-sm text-white tracking-tight leading-none block" id="header-group-name">Berlin Nightout</span>
+          <p class="text-[10px] font-mono mt-0.5 flex items-center gap-1" id="header-user-status" style="color: var(--accent)">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3]"></span> Louis (Du) • SD-77K1
+          </p>
         </div>
       </div>
 
       <div class="flex items-center space-x-1.5">
         <!-- Design Customizer Button -->
-        <button onclick="openThemeCustomizer()" title="Design Personalisieren" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs text-white hover:border-[#00FFA3] active:scale-95 transition">
-          🎨
+        <button onclick="openThemeCustomizer()" title="Design Personalisieren" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition">
+          <svg class="w-4 h-4 text-[#00FFA3]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h2v8H7zm0 0a4 4 0 004-4v-4H7v8zm10-10V7a4 4 0 00-4-4 4 4 0 00-4 4v4h8zm0 0a4 4 0 014 4 4 4 0 01-4 4h-2v-8h2z"/>
+          </svg>
         </button>
 
         <!-- Notfall-Test Button -->
-        <button onclick="triggerAccidentCountdown()" title="Unfallerkennung testen" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs text-red-400 hover:bg-red-500/20 active:scale-95 transition">
-          🚨
+        <button onclick="triggerAccidentCountdown()" title="Unfallerkennung testen" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-red-400 hover:bg-red-500/20 active:scale-95 transition">
+          <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
         </button>
 
         <!-- Anruf Starten Button -->
-        <button onclick="openCallModal()" title="Crew Audio-Anruf" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs text-[#00FFA3] hover:bg-[#00FFA3]/20 active:scale-95 transition">
-          📞
+        <button onclick="openCallModal()" title="Crew Audio-Anruf" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-[#00FFA3] hover:bg-[#00FFA3]/20 active:scale-95 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+          </svg>
         </button>
 
         <!-- Admin & Members Button -->
-        <button onclick="openMembersModal()" title="Mitglieder & Admin" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs text-slate-300 hover:text-white active:scale-95 transition">
-          👥
+        <button onclick="openMembersModal()" title="Mitglieder & Admin" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
         </button>
 
         <!-- Gruppe verlassen Button -->
-        <button onclick="confirmLeaveGroup()" title="Gruppe verlassen" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs text-amber-400 hover:bg-amber-500/20 active:scale-95 transition">
-          🚪
+        <button onclick="confirmLeaveGroup()" title="Gruppe verlassen" class="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-amber-400 hover:bg-amber-500/20 active:scale-95 transition">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
         </button>
       </div>
     </div>
 
     <!-- IN-APP NOTIFICATION BANNER -->
-    <div id="notification-banner" class="absolute top-12 left-4 right-4 z-50 liquid-glass rounded-2xl p-3 border border-red-500/40 hidden items-center gap-3 shadow-2xl transition-all duration-300">
+    <div id="notification-banner" class="absolute top-12 left-4 right-4 z-50 liquid-glass rounded-2xl p-3 border border-red-500/40 hidden items-center gap-3 shadow-[0_16px_40px_rgba(239,68,68,0.35)] transition-all duration-300">
       <div id="notif-icon-box" class="w-8 h-8 rounded-full bg-red-500/25 flex items-center justify-center text-red-400 shrink-0 text-sm">
-        ⚠️
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
       </div>
       <div class="flex-1">
         <p id="notif-title" class="text-xs font-bold text-white leading-tight">Akku-Warnung: Sarah</p>
@@ -125,29 +379,36 @@
     <div class="relative flex-1 overflow-hidden">
 
       <!-- ============================================================== -->
-      <!-- SCREEN 1: OPENSTREETMAP (ROBUST, KEIN WEISS-BUG)               -->
+      <!-- SCREEN 1: OPENSTREETMAP (ROBUST & DARK GLASS STYLED)          -->
       <!-- ============================================================== -->
-      <div id="screen-map" class="absolute inset-0 flex flex-col bg-[#080B11]">
+      <div id="screen-map" class="absolute inset-0 flex flex-col bg-[#07090E]">
         <div id="leaflet-map"></div>
 
         <!-- Top Liquid Glass Status on Map -->
         <div class="absolute top-3 left-3 right-3 z-20 liquid-glass px-4 py-2.5 rounded-2xl flex justify-between items-center text-xs">
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2.5">
             <span class="w-2.5 h-2.5 rounded-full bg-[#00FFA3] animate-ping" id="map-ping-dot"></span>
             <div>
-              <p class="font-bold text-white leading-none">Crew-Radar (OpenStreetMap)</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Auto-Prune nach 48h • Unfall-SOS aktiv</p>
+              <p class="font-extrabold text-white leading-none">Crew-Radar (OpenStreetMap)</p>
+              <p class="text-[10px] text-slate-400 mt-0.5 font-medium">Auto-Prune nach 48h • Unfall-SOS aktiv</p>
             </div>
           </div>
-          <button onclick="centerMapOnMe()" class="px-2.5 py-1 rounded-xl bg-white/10 border border-white/20 text-[11px] font-bold active:scale-95 transition" id="btn-center-map">
-            🎯 Mein Ort
+          <button onclick="centerMapOnMe()" class="px-3 py-1.5 rounded-xl glass-pill text-[11px] font-bold text-white active:scale-95 transition flex items-center gap-1.5" id="btn-center-map">
+            <svg class="w-3.5 h-3.5 text-[#00FFA3]" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+            </svg>
+            Mein Ort
           </button>
         </div>
 
         <!-- Bottom Action Button on Map -->
         <div class="absolute bottom-4 left-4 right-4 z-20">
-          <button onclick="dropSpotHere()" class="w-full py-3.5 px-4 rounded-2xl text-black font-bold text-xs shadow-lg flex items-center justify-center gap-2 active:scale-95 transition" id="btn-drop-spot" style="background: var(--accent)">
-            📍 Spot an meinem Standort droppen
+          <button onclick="dropSpotHere()" class="w-full py-3.5 px-4 rounded-2xl text-black font-extrabold text-xs shadow-[0_0_30px_rgba(0,255,163,0.4)] flex items-center justify-center gap-2 active:scale-95 transition btn-elastic" id="btn-drop-spot" style="background: var(--accent-grad)">
+            <svg class="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/>
+            </svg>
+            Spot an meinem Standort droppen
           </button>
         </div>
       </div>
@@ -155,15 +416,22 @@
       <!-- ============================================================== -->
       <!-- SCREEN 2: CREW-HUB (CHAT MIT SWIPE-TO-REPLY & AUDIO & SPLIT)  -->
       <!-- ============================================================== -->
-      <div id="screen-hub" class="absolute inset-0 flex flex-col bg-[#0A0D14] hidden">
-        <!-- Sub-Tabs -->
-        <div class="px-4 pt-3 pb-2 bg-[#0F1420]/70 shrink-0">
-          <div class="grid grid-cols-2 p-1 rounded-2xl bg-[#141926] text-xs font-bold text-center">
-            <button id="hub-tab-chat" onclick="switchHubTab('chat')" class="py-2 rounded-xl text-black transition shadow" style="background: var(--accent)">
-              💬 Chat
+      <div id="screen-hub" class="absolute inset-0 flex flex-col bg-[#07090E] hidden">
+        <!-- Sub-Tabs: Floating Liquid Segmented Pill -->
+        <div class="px-4 pt-3 pb-2 shrink-0">
+          <div class="liquid-segment-container">
+            <div id="hub-pill-slider" class="liquid-segment-slider"></div>
+            <button id="hub-tab-chat" onclick="switchHubTab('chat')" class="relative flex-1 py-2 text-xs font-extrabold text-black text-center transition-colors duration-300 z-10 flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+              Chat
             </button>
-            <button id="hub-tab-split" onclick="switchHubTab('split')" class="py-2 rounded-xl text-slate-400 hover:text-white transition">
-              🧾 Spot-Split
+            <button id="hub-tab-split" onclick="switchHubTab('split')" class="relative flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white text-center transition-colors duration-300 z-10 flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+              </svg>
+              Spot-Split
             </button>
           </div>
         </div>
@@ -171,43 +439,60 @@
         <!-- Chat View -->
         <div id="hub-view-chat" class="flex-1 flex flex-col overflow-hidden">
           <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3">
-            <div class="liquid-glass p-3 rounded-2xl text-xs text-slate-300 border border-white/10">
-              💡 <b>Swipe-to-Reply:</b> Wische eine Nachricht nach rechts, um direkt darauf zu antworten!
+            <div class="liquid-glass p-3 rounded-2xl text-xs text-slate-300 border border-white/10 flex items-center gap-2">
+              <span class="text-[#00FFA3] text-sm">💡</span>
+              <span><b>Swipe-to-Reply:</b> Wische eine Nachricht nach rechts, um direkt darauf zu antworten!</span>
             </div>
             
-            <!-- Message 1 -->
-            <div class="flex items-start space-x-2 max-w-[85%]" onpointerdown="startSwipe(event, this, 'Jonas', 'Treffen wir uns um 20 Uhr am Park?')">
-              <div class="w-7 h-7 rounded-full bg-[#6366F1] flex items-center justify-center text-xs font-bold text-white shrink-0">J</div>
-              <div class="bg-[#141A28] border border-white/10 rounded-2xl p-2.5 text-xs text-white shadow">
-                <span class="text-[10px] font-bold text-[#6366F1] block">Jonas</span>
+            <!-- Message 1 (Other User - Jonas) -->
+            <div class="flex items-start space-x-2.5 max-w-[85%]" onpointerdown="startSwipe(event, this, 'Jonas', 'Treffen wir uns um 20 Uhr am Park?')">
+              <!-- Story Ring Avatar -->
+              <div class="story-ring shrink-0">
+                <div class="story-ring-inner">
+                  <div class="w-6 h-6 rounded-full bg-[#6366F1] flex items-center justify-center text-[10px] font-extrabold text-white">J</div>
+                </div>
+              </div>
+              <div class="liquid-glass rounded-2xl rounded-tl-sm p-3 text-xs text-slate-100 shadow-[0_6px_20px_rgba(0,0,0,0.45)]">
+                <span class="text-[10px] font-bold text-[#818cf8] block mb-0.5">Jonas</span>
                 Treffen wir uns um 20 Uhr am Park?
-                <span class="text-[9px] text-slate-500 float-right ml-2 mt-1">19:42</span>
+                <span class="text-[9px] text-slate-400 float-right ml-2 mt-1 font-mono">19:42</span>
               </div>
             </div>
 
-            <!-- Message 2 (with Audio Note) -->
-            <div class="flex items-start space-x-2 max-w-[85%]" onpointerdown="startSwipe(event, this, 'Sarah', '🎙️ Sprachmemo')">
-              <div class="w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">S</div>
-              <div class="bg-[#141A28] border border-white/10 rounded-2xl p-2.5 text-xs text-white shadow">
-                <span class="text-[10px] font-bold text-pink-400 block">Sarah</span>
-                <div class="flex items-center space-x-2 p-2 bg-black/30 rounded-xl my-1 cursor-pointer" onclick="togglePlayVoice(this)">
-                  <button class="w-7 h-7 rounded-full bg-[#00FFA3] text-black flex items-center justify-center font-bold text-xs">▶</button>
-                  <div class="flex items-center space-x-1">
-                    <span class="w-1 h-3 bg-white/70 rounded"></span>
-                    <span class="w-1 h-5 bg-white/90 rounded"></span>
-                    <span class="w-1 h-2 bg-white/60 rounded"></span>
-                    <span class="w-1 h-6 bg-white/90 rounded"></span>
-                    <span class="w-1 h-4 bg-white/70 rounded"></span>
+            <!-- Message 2 (Other User - Sarah with Audio Waveform) -->
+            <div class="flex items-start space-x-2.5 max-w-[85%]" onpointerdown="startSwipe(event, this, 'Sarah', '🎙️ Sprachmemo')">
+              <div class="story-ring shrink-0">
+                <div class="story-ring-inner">
+                  <div class="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-[10px] font-extrabold text-white">S</div>
+                </div>
+              </div>
+              <div class="liquid-glass rounded-2xl rounded-tl-sm p-3 text-xs text-slate-100 shadow-[0_6px_20px_rgba(0,0,0,0.45)]">
+                <span class="text-[10px] font-bold text-pink-400 block mb-0.5">Sarah</span>
+                <div class="flex items-center space-x-2.5 p-2 bg-black/40 border border-white/10 rounded-xl my-1.5 cursor-pointer hover:border-[#00FFA3]/50 transition" onclick="togglePlayVoice(this)">
+                  <button class="w-7 h-7 rounded-full bg-[#00FFA3] text-black flex items-center justify-center font-bold text-xs shadow-[0_0_12px_rgba(0,255,163,0.4)]">
+                    <svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  </button>
+                  <!-- Dynamic Waveform Bars -->
+                  <div class="flex items-center space-x-1 h-5">
+                    <span class="waveform-bar bg-white/70 h-2"></span>
+                    <span class="waveform-bar bg-white/90 h-4"></span>
+                    <span class="waveform-bar bg-white/60 h-2"></span>
+                    <span class="waveform-bar bg-white/90 h-5"></span>
+                    <span class="waveform-bar bg-white/80 h-3"></span>
+                    <span class="waveform-bar bg-[#00FFA3] h-4"></span>
+                    <span class="waveform-bar bg-white/60 h-2"></span>
+                    <span class="waveform-bar bg-white/90 h-5"></span>
                   </div>
-                  <span class="text-[10px] text-slate-400 voice-timer">0:04</span>
+                  <span class="text-[10px] text-slate-300 font-mono voice-timer">0:04</span>
                 </div>
                 Bin gleich da!
+                <span class="text-[9px] text-slate-400 float-right ml-2 mt-1 font-mono">19:44</span>
               </div>
             </div>
           </div>
 
           <!-- Active Swipe-to-Reply Banner -->
-          <div id="reply-banner" class="hidden px-4 py-2 bg-[#141926] border-t border-white/10 flex items-center justify-between text-xs">
+          <div id="reply-banner" class="hidden px-4 py-2 liquid-glass border-t border-white/10 flex items-center justify-between text-xs">
             <div class="flex items-center space-x-2 border-l-2 pl-2" style="border-color: var(--accent)">
               <div>
                 <p id="reply-author" class="font-bold text-[10px]" style="color: var(--accent)">Antwort an Jonas</p>
@@ -217,25 +502,33 @@
             <button onclick="cancelReply()" class="text-slate-400 hover:text-white text-sm">✕</button>
           </div>
 
-          <!-- Fixed Chat Input Area -->
-          <div class="p-3 bg-[#0D121D] border-t border-white/10 flex items-center space-x-2 shrink-0">
-            <button onclick="simulateSendPhoto()" title="Bild senden" class="w-9 h-9 rounded-full bg-[#182133] border border-white/10 flex items-center justify-center text-slate-300 hover:text-[#00FFA3] active:scale-95 transition">
-              📷
+          <!-- Floating Chat Input Bar Area -->
+          <div class="p-3 bg-[#07090E]/90 backdrop-blur-md border-t border-white/10 flex items-center space-x-2 shrink-0">
+            <button onclick="simulateSendPhoto()" title="Bild senden" class="w-9 h-9 rounded-full glass-pill flex items-center justify-center text-slate-300 hover:text-[#00FFA3] active:scale-95 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
             </button>
-            <button id="btn-voice-rec" onclick="toggleVoiceRecord()" title="Sprachnachricht aufnehmen" class="w-9 h-9 rounded-full bg-[#182133] border border-white/10 flex items-center justify-center text-slate-300 hover:text-red-400 active:scale-95 transition">
-              🎙️
+            <button id="btn-voice-rec" onclick="toggleVoiceRecord()" title="Sprachnachricht aufnehmen" class="w-9 h-9 rounded-full glass-pill flex items-center justify-center text-slate-300 hover:text-red-400 active:scale-95 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+              </svg>
             </button>
-            <input id="chat-input-field" type="text" placeholder="Nachricht schreiben (Swipe zum Antworten)..." class="flex-1 bg-[#141A28] border border-white/10 rounded-full px-4 py-2 text-xs text-white focus:outline-none">
-            <button onclick="sendChatMessage()" class="w-9 h-9 rounded-full flex items-center justify-center text-black font-bold active:scale-95 transition" style="background: var(--accent)">
-              ➤
+            <input id="chat-input-field" type="text" placeholder="Nachricht schreiben (Swipe zum Antworten)..." class="flex-1 bg-[#101622]/90 border border-white/10 rounded-full px-4 py-2.5 text-xs text-white focus:outline-none transition">
+            <button onclick="sendChatMessage()" class="w-9 h-9 rounded-full flex items-center justify-center text-black font-extrabold active:scale-95 transition btn-elastic shadow-[0_0_18px_rgba(0,255,163,0.4)]" style="background: var(--accent-grad)">
+              <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
             </button>
           </div>
         </div>
 
         <!-- Spot-Split View -->
         <div id="hub-view-split" class="flex-1 flex flex-col p-4 overflow-y-auto hidden">
-          <button onclick="openAddExpenseModal()" class="w-full py-3 rounded-2xl text-black font-bold text-xs flex items-center justify-center gap-2 shadow-lg mb-4 active:scale-95 transition" style="background: var(--accent)">
-            ➕ Neue Rechnung aufteilen
+          <button onclick="openAddExpenseModal()" class="w-full py-3.5 rounded-2xl text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(0,255,163,0.35)] mb-4 active:scale-95 transition btn-elastic" style="background: var(--accent-grad)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Neue Rechnung aufteilen
           </button>
           
           <div id="expenses-list" class="space-y-3"></div>
@@ -245,14 +538,15 @@
       <!-- ============================================================== -->
       <!-- SCREEN 3: SNAP-VAULT                                           -->
       <!-- ============================================================== -->
-      <div id="screen-vault" class="absolute inset-0 flex flex-col bg-[#080B11] p-4 overflow-y-auto hidden">
-        <div class="flex justify-between items-center mb-3">
+      <div id="screen-vault" class="absolute inset-0 flex flex-col bg-[#07090E] p-4 overflow-y-auto hidden">
+        <div class="flex justify-between items-center mb-4">
           <div>
-            <h2 class="text-sm font-bold text-white">Snap-Vault Tresor</h2>
+            <h2 class="text-sm font-extrabold text-white tracking-tight">Snap-Vault Tresor</h2>
             <p class="text-[11px] text-slate-400">Tippe ein Foto an für Vollbild oder zum Löschen</p>
           </div>
-          <button onclick="uploadSnapSimulation()" class="py-2 px-3 rounded-xl text-black font-bold text-xs shadow active:scale-95 transition" style="background: var(--accent)">
-            📸 Snappen
+          <!-- Snapchat Style Shutter Shutter Trigger -->
+          <button onclick="uploadSnapSimulation()" class="snap-shutter active:scale-95 transition shrink-0" title="Foto snappen">
+            <div class="snap-shutter-circle"></div>
           </button>
         </div>
 
@@ -260,17 +554,29 @@
       </div>
     </div>
 
-    <!-- LIQUID GLASS BOTTOM NAVIGATION -->
-    <div class="p-3 bg-[#080B11] border-t border-white/5 shrink-0 z-30">
-      <div class="liquid-glass rounded-3xl p-1.5 flex justify-around items-center">
-        <button id="nav-btn-map" onclick="switchScreen('map')" class="py-2 px-4 rounded-full text-black font-bold text-xs flex items-center gap-1.5 transition shadow" style="background: var(--accent)">
-          🗺️ <span>Spot-Map</span>
+    <!-- LIQUID GLASS FLOATING BOTTOM NAVIGATION -->
+    <div class="p-3 bg-[#07090E] border-t border-white/5 shrink-0 z-30">
+      <div class="bottom-nav-container flex justify-around items-center">
+        <div id="bottom-nav-slider" class="bottom-nav-slider"></div>
+        
+        <button id="nav-btn-map" onclick="switchScreen('map')" class="relative flex-1 py-2 px-2 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors duration-300 z-10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+          </svg>
+          <span>Spot-Map</span>
         </button>
-        <button id="nav-btn-hub" onclick="switchScreen('hub')" class="py-2 px-4 rounded-full text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition">
-          💬 <span>Crew-Hub</span>
+        <button id="nav-btn-hub" onclick="switchScreen('hub')" class="relative flex-1 py-2 px-2 text-slate-400 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-colors duration-300 z-10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+          <span>Crew-Hub</span>
         </button>
-        <button id="nav-btn-vault" onclick="switchScreen('vault')" class="py-2 px-4 rounded-full text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition">
-          📸 <span>Snap-Vault</span>
+        <button id="nav-btn-vault" onclick="switchScreen('vault')" class="relative flex-1 py-2 px-2 text-slate-400 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-colors duration-300 z-10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span>Snap-Vault</span>
         </button>
       </div>
     </div>
@@ -280,39 +586,42 @@
   <!-- ============================================================== -->
   <!-- MODAL: DESIGN PERSONALISIEREN (AKZENTFARBEN & GLAS-STILE)     -->
   <!-- ============================================================== -->
-  <div id="theme-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-end justify-center p-4">
-    <div class="liquid-glass w-full max-w-sm rounded-[32px] p-5 border border-white/20 animate-in fade-in">
+  <div id="theme-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+    <div class="liquid-glass w-full max-w-sm rounded-[32px] p-6 border border-white/20 animate-in fade-in shadow-[0_20px_60px_rgba(0,0,0,0.85)]">
       <div class="flex justify-between items-center mb-4">
         <div class="flex items-center space-x-2">
-          <span class="text-lg">🎨</span>
-          <h3 class="text-sm font-bold text-white">Design Personalisieren</h3>
+          <span class="text-[#00FFA3]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h2v8H7zm0 0a4 4 0 004-4v-4H7v8zm10-10V7a4 4 0 00-4-4 4 4 0 00-4 4v4h8zm0 0a4 4 0 014 4 4 4 0 01-4 4h-2v-8h2z"/>
+            </svg>
+          </span>
+          <h3 class="text-sm font-extrabold text-white">Design Personalisieren</h3>
         </div>
-        <button onclick="closeThemeCustomizer()" class="text-slate-400 hover:text-white text-sm">✕</button>
+        <button onclick="closeThemeCustomizer()" class="text-slate-400 hover:text-white text-sm w-7 h-7 rounded-full glass-pill flex items-center justify-center">✕</button>
       </div>
 
       <p class="text-xs text-slate-300 font-bold mb-2">Akzentfarbe wählen:</p>
-      <div class="flex justify-around items-center mb-5 p-2 bg-black/40 rounded-2xl">
-        <button onclick="setAppAccent('#00FFA3')" class="w-8 h-8 rounded-full bg-[#00FFA3] border-2 border-white/40 hover:scale-110 transition shadow"></button>
-        <button onclick="setAppAccent('#8B5CF6')" class="w-8 h-8 rounded-full bg-[#8B5CF6] border-2 border-white/40 hover:scale-110 transition shadow"></button>
-        <button onclick="setAppAccent('#06B6D4')" class="w-8 h-8 rounded-full bg-[#06B6D4] border-2 border-white/40 hover:scale-110 transition shadow"></button>
-        <button onclick="setAppAccent('#EC4899')" class="w-8 h-8 rounded-full bg-[#EC4899] border-2 border-white/40 hover:scale-110 transition shadow"></button>
-        <button onclick="setAppAccent('#F59E0B')" class="w-8 h-8 rounded-full bg-[#F59E0B] border-2 border-white/40 hover:scale-110 transition shadow"></button>
-        <button onclick="setAppAccent('#FF4757')" class="w-8 h-8 rounded-full bg-[#FF4757] border-2 border-white/40 hover:scale-110 transition shadow"></button>
+      <div class="flex justify-around items-center mb-5 p-2.5 bg-black/50 border border-white/10 rounded-2xl">
+        <button onclick="setAppAccent('#00FFA3')" class="w-8 h-8 rounded-full bg-[#00FFA3] border-2 border-white/40 hover:scale-110 transition shadow-[0_0_12px_rgba(0,255,163,0.5)]"></button>
+        <button onclick="setAppAccent('#00E5FF')" class="w-8 h-8 rounded-full bg-[#00E5FF] border-2 border-white/40 hover:scale-110 transition shadow-[0_0_12px_rgba(0,229,255,0.5)]"></button>
+        <button onclick="setAppAccent('#8B5CF6')" class="w-8 h-8 rounded-full bg-[#8B5CF6] border-2 border-white/40 hover:scale-110 transition shadow-[0_0_12px_rgba(139,92,246,0.5)]"></button>
+        <button onclick="setAppAccent('#EC4899')" class="w-8 h-8 rounded-full bg-[#EC4899] border-2 border-white/40 hover:scale-110 transition shadow-[0_0_12px_rgba(236,72,153,0.5)]"></button>
+        <button onclick="setAppAccent('#F59E0B')" class="w-8 h-8 rounded-full bg-[#F59E0B] border-2 border-white/40 hover:scale-110 transition shadow-[0_0_12px_rgba(245,158,11,0.5)]"></button>
       </div>
 
       <p class="text-xs text-slate-300 font-bold mb-2">Liquid Glass Stil:</p>
       <div class="space-y-2">
-        <button onclick="setGlassStyle('liquid')" class="w-full text-left p-3 rounded-2xl bg-white/10 hover:bg-white/15 flex justify-between items-center text-xs font-bold text-white">
+        <button onclick="setGlassStyle('liquid')" class="w-full text-left p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 flex justify-between items-center text-xs font-bold text-white transition">
           <span>✨ Liquid Glass (VisionOS)</span>
-          <span class="text-[10px] text-slate-400">Frosted Blur</span>
+          <span class="text-[10px] text-slate-400 font-mono">Frosted Blur</span>
         </button>
-        <button onclick="setGlassStyle('obsidian')" class="w-full text-left p-3 rounded-2xl bg-black/60 hover:bg-black/80 flex justify-between items-center text-xs font-bold text-white">
+        <button onclick="setGlassStyle('obsidian')" class="w-full text-left p-3.5 rounded-2xl bg-black/60 hover:bg-black/80 border border-white/10 flex justify-between items-center text-xs font-bold text-white transition">
           <span>🖤 Deep Obsidian (OLED)</span>
-          <span class="text-[10px] text-slate-400">Pure Black</span>
+          <span class="text-[10px] text-slate-400 font-mono">Space Grey</span>
         </button>
-        <button onclick="setGlassStyle('neon')" class="w-full text-left p-3 rounded-2xl bg-[#0C121D] border border-[#00FFA3]/50 flex justify-between items-center text-xs font-bold text-white">
+        <button onclick="setGlassStyle('neon')" class="w-full text-left p-3.5 rounded-2xl bg-[#0C121D] border border-[#00FFA3]/50 flex justify-between items-center text-xs font-bold text-white transition shadow-[0_0_16px_rgba(0,255,163,0.2)]">
           <span>⚡ Cyberpunk Neon</span>
-          <span class="text-[10px] text-slate-400">Glow Edge</span>
+          <span class="text-[10px] text-slate-400 font-mono">Outer Glow</span>
         </button>
       </div>
     </div>
@@ -321,21 +630,23 @@
   <!-- ============================================================== -->
   <!-- MODAL: UNFALLERKENNUNG (30s COUNTDOWN & LÖSCHEN)              -->
   <!-- ============================================================== -->
-  <div id="accident-modal" class="fixed inset-0 bg-red-950/85 backdrop-blur-md z-50 hidden items-center justify-center p-4">
-    <div class="liquid-glass w-full max-w-sm rounded-[36px] p-6 border-2 border-red-500 text-center shadow-[0_0_80px_rgba(239,68,68,0.5)]">
-      <div class="w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500 mx-auto flex items-center justify-center text-2xl text-red-400 mb-4">
-        🚨
+  <div id="accident-modal" class="fixed inset-0 bg-red-950/85 backdrop-blur-xl z-50 hidden items-center justify-center p-4">
+    <div class="liquid-glass w-full max-w-sm rounded-[36px] p-6 border-2 border-red-500 text-center shadow-[0_0_90px_rgba(239,68,68,0.65)]">
+      <div class="w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500 mx-auto flex items-center justify-center text-2xl text-red-400 mb-4 animate-pulse">
+        <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
       </div>
-      <h2 class="text-xl font-bold text-white mb-1">STURZ / AUFPRALL ERKANNT!</h2>
-      <p class="text-xs text-slate-300 mb-6">
+      <h2 class="text-xl font-extrabold text-white mb-1 tracking-tight">STURZ / AUFPRALL ERKANNT!</h2>
+      <p class="text-xs text-slate-300 mb-6 font-medium">
         Sensoren haben >3.2G gemessen. Automatischer SOS-Notruf mit GPS wird gesendet in:
       </p>
 
-      <div class="w-24 h-24 rounded-full border-4 border-red-500 mx-auto flex items-center justify-center text-4xl font-extrabold text-white mb-6">
+      <div class="w-24 h-24 rounded-full border-4 border-red-500 mx-auto flex items-center justify-center text-4xl font-extrabold text-white mb-6 shadow-[0_0_30px_rgba(239,68,68,0.5)]">
         <span id="accident-countdown">30</span>
       </div>
 
-      <button onclick="cancelAccidentEmergency()" class="w-full py-4 rounded-2xl bg-[#00FFA3] text-black font-extrabold text-sm shadow-xl active:scale-95 transition">
+      <button onclick="cancelAccidentEmergency()" class="w-full py-4 rounded-2xl text-black font-extrabold text-sm shadow-[0_0_30px_rgba(0,255,163,0.4)] active:scale-95 transition btn-elastic" style="background: var(--accent-grad)">
         ICH BIN OK (Alarm abbrechen)
       </button>
     </div>
@@ -344,40 +655,45 @@
   <!-- ============================================================== -->
   <!-- MODAL: VOIP AUDIO-CALL                                        -->
   <!-- ============================================================== -->
-  <div id="call-modal" class="fixed inset-0 bg-[#080B11]/95 backdrop-blur-xl z-50 hidden flex-col justify-between p-8">
+  <div id="call-modal" class="fixed inset-0 bg-[#07090E]/95 backdrop-blur-2xl z-50 hidden flex-col justify-between p-8">
     <div class="text-center pt-8">
       <p class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">Spotdrop Audio-Call</p>
-      <h2 id="call-partner" class="text-2xl font-bold text-white mt-2">Jonas</h2>
+      <h2 id="call-partner" class="text-2xl font-extrabold text-white mt-2 tracking-tight">Jonas</h2>
       <p id="call-timer" class="text-xs text-slate-400 font-mono mt-1">Verbunden • 00:18</p>
     </div>
 
     <!-- Pulsing Waveform Avatar -->
     <div class="relative w-44 h-44 mx-auto flex items-center justify-center">
       <div class="absolute inset-0 rounded-full border-2 pulse-ring" style="border-color: var(--accent)"></div>
-      <div class="w-28 h-28 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#00FFA3] flex items-center justify-center text-3xl font-bold text-black shadow-2xl">
-        📞
+      <div class="story-ring story-ring-active p-1">
+        <div class="story-ring-inner">
+          <div class="w-28 h-28 rounded-full bg-gradient-to-tr from-[#00FFA3] to-[#00E5FF] flex items-center justify-center text-3xl font-extrabold text-black shadow-2xl">
+            <svg class="w-10 h-10 fill-current" viewBox="0 0 24 24"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.21 2.2z"/></svg>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Equalizer Bar Visualization -->
-    <div class="flex justify-center items-end space-x-1.5 h-8">
-      <span class="w-1 bg-[#00FFA3] rounded animate-bounce h-4"></span>
-      <span class="w-1 bg-[#00FFA3] rounded animate-bounce h-8"></span>
-      <span class="w-1 bg-[#00FFA3] rounded animate-bounce h-5"></span>
-      <span class="w-1 bg-[#00FFA3] rounded animate-bounce h-7"></span>
-      <span class="w-1 bg-[#00FFA3] rounded animate-bounce h-3"></span>
+    <div class="flex justify-center items-end space-x-2 h-10">
+      <span class="w-1.5 bg-[#00FFA3] rounded-full waveform-active-0"></span>
+      <span class="w-1.5 bg-[#00E5FF] rounded-full waveform-active-1"></span>
+      <span class="w-1.5 bg-[#00FFA3] rounded-full waveform-active-2"></span>
+      <span class="w-1.5 bg-[#00E5FF] rounded-full waveform-active-3"></span>
+      <span class="w-1.5 bg-[#00FFA3] rounded-full waveform-active-4"></span>
+      <span class="w-1.5 bg-[#00E5FF] rounded-full waveform-active-5"></span>
     </div>
 
     <!-- Controls -->
     <div class="flex justify-around items-center pb-6">
-      <button onclick="toggleMute(this)" class="w-14 h-14 rounded-full bg-[#182133] border border-white/10 flex items-center justify-center text-white text-lg">
-        🎤
+      <button onclick="toggleMute(this)" class="w-14 h-14 rounded-full glass-pill flex items-center justify-center text-white text-lg">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
       </button>
-      <button onclick="endCall()" class="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-white text-2xl shadow-xl active:scale-95 transition">
-        📵
+      <button onclick="endCall()" class="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-[0_0_30px_rgba(239,68,68,0.6)] active:scale-95 transition btn-elastic">
+        <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 010-1.41C3.51 8.5 7.51 6.5 12 6.5s8.49 2 11.71 5.17c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85-.33-.16-.56-.51-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
       </button>
-      <button onclick="toggleSpeaker(this)" class="w-14 h-14 rounded-full bg-[#182133] border border-white/10 flex items-center justify-center text-white text-lg">
-        🔊
+      <button onclick="toggleSpeaker(this)" class="w-14 h-14 rounded-full glass-pill flex items-center justify-center text-white text-lg">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
       </button>
     </div>
   </div>
@@ -385,25 +701,26 @@
   <!-- ============================================================== -->
   <!-- MODAL: SNAP FULLSCREEN VIEWER & LÖSCHEN                       -->
   <!-- ============================================================== -->
-  <div id="snap-fullscreen-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex-col justify-between p-4">
+  <div id="snap-fullscreen-modal" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 hidden flex-col justify-between p-4">
     <div class="flex justify-between items-center text-white pt-2">
       <div>
-        <p id="fs-caption" class="text-sm font-bold">Snap vom Abend</p>
-        <p id="fs-meta" class="text-[10px] text-slate-400">Von Louis • 21:05 Uhr</p>
+        <p id="fs-caption" class="text-sm font-extrabold tracking-tight">Snap vom Abend</p>
+        <p id="fs-meta" class="text-[10px] text-slate-400 font-mono">Von Louis • 21:05 Uhr</p>
       </div>
       <div class="flex items-center space-x-2">
-        <button onclick="deleteCurrentSnap()" class="px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold hover:bg-red-500/40 active:scale-95 transition">
-          🗑️ Löschen
+        <button onclick="deleteCurrentSnap()" class="px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold hover:bg-red-500/40 active:scale-95 transition flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Löschen
         </button>
-        <button onclick="closeFullscreenSnap()" class="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center">✕</button>
+        <button onclick="closeFullscreenSnap()" class="w-8 h-8 rounded-full glass-pill text-white flex items-center justify-center">✕</button>
       </div>
     </div>
 
     <div class="flex-1 flex items-center justify-center p-2">
-      <img id="fs-image" src="" alt="Snap" class="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl">
+      <img id="fs-image" src="" alt="Snap" class="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] border border-white/10">
     </div>
 
-    <div class="text-center text-xs text-slate-500 pb-2">
+    <div class="text-center text-xs text-slate-500 pb-2 font-mono">
       Pinch/Klick zum Vergrößern • Gespeichert im GitHub Vault
     </div>
   </div>
@@ -439,29 +756,33 @@
 
     function setAppAccent(color) {
       document.documentElement.style.setProperty('--accent', color);
-      document.getElementById('btn-drop-spot').style.background = color;
-      document.getElementById('hub-tab-chat').style.background = color;
-      document.getElementById('nav-btn-map').style.background = color;
+      document.documentElement.style.setProperty('--accent-grad', `linear-gradient(135deg, ${color} 0%, #00E5FF 100%)`);
+      closeThemeCustomizer();
     }
 
     function setGlassStyle(style) {
       const shell = document.getElementById('device-shell');
+      shell.classList.remove('liquid-glass', 'obsidian-glass', 'neon-glass');
       if (style === 'obsidian') {
-        shell.className = shell.className.replace(/liquid-glass|neon-glass/g, '') + ' obsidian-glass';
+        shell.classList.add('obsidian-glass');
       } else if (style === 'neon') {
-        shell.className = shell.className.replace(/liquid-glass|obsidian-glass/g, '') + ' neon-glass';
+        shell.classList.add('neon-glass');
+      } else {
+        shell.classList.add('liquid-glass');
       }
       closeThemeCustomizer();
     }
 
     function openThemeCustomizer() {
-      document.getElementById('theme-modal').classList.remove('hidden');
-      document.getElementById('theme-modal').classList.add('flex');
+      const modal = document.getElementById('theme-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
     }
 
     function closeThemeCustomizer() {
-      document.getElementById('theme-modal').classList.add('hidden');
-      document.getElementById('theme-modal').classList.remove('flex');
+      const modal = document.getElementById('theme-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
 
     // Swipe to Reply
@@ -469,14 +790,16 @@
       currentReply = { author, text };
       document.getElementById('reply-author').innerText = `Antwort an ${author}`;
       document.getElementById('reply-text').innerText = text;
-      document.getElementById('reply-banner').classList.remove('hidden');
-      document.getElementById('reply-banner').classList.add('flex');
+      const banner = document.getElementById('reply-banner');
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
     }
 
     function cancelReply() {
       currentReply = null;
-      document.getElementById('reply-banner').classList.add('hidden');
-      document.getElementById('reply-banner').classList.remove('flex');
+      const banner = document.getElementById('reply-banner');
+      banner.classList.add('hidden');
+      banner.classList.remove('flex');
     }
 
     // Voice Notes
@@ -485,15 +808,15 @@
       if (!isRecording) {
         isRecording = true;
         voiceSec = 0;
-        btn.classList.add('bg-red-500/40', 'animate-pulse');
+        btn.classList.add('bg-red-500/30', 'text-red-400', 'animate-pulse');
         voiceInterval = setInterval(() => {
           voiceSec++;
-          document.getElementById('chat-input-field').placeholder = `🎙️ Aufnahme: 0:0${voiceSec} (Nochmal tippen zum Senden)`;
+          document.getElementById('chat-input-field').placeholder = `🎙️ Aufnahme: 0:0${voiceSec} (Erneut tippen zum Senden)`;
         }, 1000);
       } else {
         isRecording = false;
         clearInterval(voiceInterval);
-        btn.classList.remove('bg-red-500/40', 'animate-pulse');
+        btn.classList.remove('bg-red-500/30', 'text-red-400', 'animate-pulse');
         document.getElementById('chat-input-field').placeholder = "Nachricht schreiben (Swipe zum Antworten)...";
         sendVoiceMessage(voiceSec || 4);
       }
@@ -504,12 +827,22 @@
       const div = document.createElement('div');
       div.className = 'flex items-end justify-end space-x-2 ml-auto max-w-[85%]';
       div.innerHTML = `
-        <div class="bg-[#00FFA3] text-black font-medium rounded-2xl p-2.5 text-xs shadow">
-          <div class="flex items-center space-x-2 cursor-pointer" onclick="togglePlayVoice(this)">
-            <button class="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">▶</button>
-            <span class="font-bold text-xs">Sprachmemo (0:0${sec})</span>
+        <div class="p-3 text-xs text-black font-semibold rounded-2xl rounded-tr-sm shadow-[0_6px_20px_rgba(0,255,163,0.35)]" style="background: var(--accent-grad)">
+          <div class="flex items-center space-x-2.5 cursor-pointer" onclick="togglePlayVoice(this)">
+            <button class="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shadow">
+              <svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <div class="flex items-center space-x-1 h-4">
+              <span class="waveform-bar bg-black/80 h-2"></span>
+              <span class="waveform-bar bg-black h-4"></span>
+              <span class="waveform-bar bg-black/70 h-2"></span>
+              <span class="waveform-bar bg-black h-3.5"></span>
+              <span class="waveform-bar bg-black/90 h-4"></span>
+              <span class="waveform-bar bg-black/60 h-2"></span>
+            </div>
+            <span class="font-bold text-xs font-mono">0:0${sec}</span>
           </div>
-          <span class="text-[9px] text-slate-800 float-right ml-2 mt-1">Jetzt ✓✓</span>
+          <span class="text-[9px] text-black/70 font-mono float-right ml-2 mt-1">Jetzt ✓✓</span>
         </div>
       `;
       container.appendChild(div);
@@ -518,11 +851,22 @@
 
     function togglePlayVoice(btnContainer) {
       const btn = btnContainer.querySelector('button');
-      if (btn.innerText === '▶') {
-        btn.innerText = '⏸';
-        setTimeout(() => { btn.innerText = '▶'; }, 3000);
+      const bars = btnContainer.querySelectorAll('.waveform-bar');
+      const isPlaying = btn.dataset.playing === 'true';
+
+      if (!isPlaying) {
+        btn.dataset.playing = 'true';
+        btn.innerHTML = `<svg class="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+        bars.forEach((b, i) => b.classList.add(`waveform-active-${i % 6}`));
+        setTimeout(() => {
+          btn.dataset.playing = 'false';
+          btn.innerHTML = `<svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+          bars.forEach((b, i) => b.classList.remove(`waveform-active-${i % 6}`));
+        }, 3000);
       } else {
-        btn.innerText = '▶';
+        btn.dataset.playing = 'false';
+        btn.innerHTML = `<svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+        bars.forEach((b, i) => b.classList.remove(`waveform-active-${i % 6}`));
       }
     }
 
@@ -538,15 +882,19 @@
         const color = member.isMe ? '#00FFA3' : (isLow ? '#EF4444' : '#6366F1');
         const iconHtml = `
           <div class="flex flex-col items-center cursor-pointer">
-            <span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold text-black shadow mb-0.5" style="background:${color}">
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold text-black shadow-md mb-1" style="background:${color}">
               ${member.name} (${member.battery}%)
             </span>
-            <div class="w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-xs font-bold text-black" style="background:${color}">
-              ${member.name.substring(0, 1)}
+            <div class="story-ring ${member.isMe ? 'story-ring-active' : ''}">
+              <div class="story-ring-inner">
+                <div class="w-6 h-6 rounded-full border border-white shadow flex items-center justify-center text-[10px] font-extrabold text-white" style="background:${color}">
+                  ${member.name.substring(0, 1)}
+                </div>
+              </div>
             </div>
           </div>
         `;
-        const customIcon = L.divIcon({ html: iconHtml, className: '', iconSize: [60, 45], iconAnchor: [30, 45] });
+        const customIcon = L.divIcon({ html: iconHtml, className: '', iconSize: [60, 48], iconAnchor: [30, 48] });
         L.marker([member.lat, member.lng], { icon: customIcon }).addTo(mapInstance);
       });
     }
@@ -556,7 +904,7 @@
     }
 
     function dropSpotHere() {
-      const title = prompt("Spot Name:", "Parkbank Spot");
+      const title = prompt("Spot Name:", "Parkbank Chillout");
       if (title) alert(`🎯 Spot "${title}" platziert!`);
     }
 
@@ -564,8 +912,9 @@
     function triggerAccidentCountdown() {
       accidentSeconds = 30;
       document.getElementById('accident-countdown').innerText = accidentSeconds;
-      document.getElementById('accident-modal').classList.remove('hidden');
-      document.getElementById('accident-modal').classList.add('flex');
+      const modal = document.getElementById('accident-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
 
       clearInterval(accidentTimer);
       accidentTimer = setInterval(() => {
@@ -573,8 +922,8 @@
         document.getElementById('accident-countdown').innerText = accidentSeconds;
         if (accidentSeconds <= 0) {
           clearInterval(accidentTimer);
-          document.getElementById('accident-modal').classList.add('hidden');
-          document.getElementById('accident-modal').classList.remove('flex');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
           sendEmergencySOS();
         }
       }, 1000);
@@ -582,32 +931,36 @@
 
     function cancelAccidentEmergency() {
       clearInterval(accidentTimer);
-      document.getElementById('accident-modal').classList.add('hidden');
-      document.getElementById('accident-modal').classList.remove('flex');
+      const modal = document.getElementById('accident-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
 
     function sendEmergencySOS() {
       const container = document.getElementById('chat-messages');
       const div = document.createElement('div');
-      div.className = 'liquid-glass p-3 rounded-2xl text-xs font-bold text-red-400 border border-red-500 shadow-xl my-2 flex justify-between items-center';
+      div.className = 'liquid-glass p-3.5 rounded-2xl text-xs font-bold text-red-400 border border-red-500/80 shadow-[0_0_24px_rgba(239,68,68,0.4)] my-2 flex justify-between items-center';
       div.innerHTML = `
-        <div>
-          🚨 [NOTFALL/UNFALL] Louis hatte einen schweren Aufprall! Ort: 52.5200, 13.4050
+        <div class="flex items-center gap-2">
+          <span class="text-base">🚨</span>
+          <span><b>[NOTFALL/UNFALL]</b> Louis hatte einen schweren Aufprall! Ort: 52.5200, 13.4050</span>
         </div>
-        <button onclick="this.parentElement.remove()" class="px-2 py-1 bg-red-500/20 rounded border border-red-500 text-xs text-white">Löschen ✕</button>
+        <button onclick="this.parentElement.remove()" class="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/40 rounded-lg border border-red-500/40 text-[10px] text-white transition">Löschen ✕</button>
       `;
       container.appendChild(div);
     }
 
     // Call Screen
     function openCallModal() {
-      document.getElementById('call-modal').classList.remove('hidden');
-      document.getElementById('call-modal').classList.add('flex');
+      const modal = document.getElementById('call-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
     }
 
     function endCall() {
-      document.getElementById('call-modal').classList.add('hidden');
-      document.getElementById('call-modal').classList.remove('flex');
+      const modal = document.getElementById('call-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
 
     function toggleMute(btn) { btn.classList.toggle('bg-red-500/40'); }
@@ -627,7 +980,7 @@
       let replyHtml = '';
       if (currentReply) {
         replyHtml = `
-          <div class="text-[10px] text-black/70 bg-black/10 rounded-lg p-1.5 mb-1 border-l-2 border-black">
+          <div class="text-[10px] text-black/75 bg-black/15 rounded-lg p-1.5 mb-1.5 border-l-2 border-black/80 font-medium">
             <b>${currentReply.author}:</b> ${currentReply.text}
           </div>
         `;
@@ -635,10 +988,10 @@
       }
 
       div.innerHTML = `
-        <div class="bg-[#00FFA3] text-black font-medium rounded-2xl p-2.5 text-xs shadow">
+        <div class="p-3 text-xs text-black font-medium rounded-2xl rounded-tr-sm shadow-[0_6px_20px_rgba(0,255,163,0.35)]" style="background: var(--accent-grad)">
           ${replyHtml}
-          ${text}
-          <span class="text-[9px] text-slate-800 float-right ml-2 mt-1">Jetzt ✓✓</span>
+          <span>${text}</span>
+          <span class="text-[9px] text-black/70 font-mono float-right ml-2 mt-1">Jetzt ✓✓</span>
         </div>
       `;
       container.appendChild(div);
@@ -650,26 +1003,38 @@
       const div = document.createElement('div');
       div.className = 'flex items-end justify-end space-x-2 ml-auto max-w-[85%]';
       div.innerHTML = `
-        <div class="bg-[#00FFA3] text-black font-medium rounded-2xl p-2 text-xs shadow">
-          <img src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=300" class="w-36 h-24 object-cover rounded-xl mb-1">
-          📷 Foto gesendet
-          <span class="text-[9px] text-slate-800 float-right ml-2 mt-1">Jetzt ✓✓</span>
+        <div class="p-2 text-xs text-black font-semibold rounded-2xl rounded-tr-sm shadow-[0_6px_20px_rgba(0,255,163,0.35)]" style="background: var(--accent-grad)">
+          <img src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=300" class="w-36 h-24 object-cover rounded-xl mb-1 shadow-inner border border-black/10">
+          <div class="flex items-center gap-1 text-[11px] px-1 font-bold">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+            Foto gesendet
+          </div>
+          <span class="text-[9px] text-black/70 font-mono float-right ml-2 mt-1">Jetzt ✓✓</span>
         </div>
       `;
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
     }
 
-    // Screens
+    // Screens Navigation & Gliding Liquid Indicator
     function switchScreen(screen) {
-      ['map', 'hub', 'vault'].forEach(s => {
+      const screens = ['map', 'hub', 'vault'];
+      screens.forEach((s, i) => {
         document.getElementById('screen-' + s).classList.add('hidden');
-        document.getElementById('nav-btn-' + s).className = 'py-2 px-4 rounded-full text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition';
+        const btn = document.getElementById('nav-btn-' + s);
+        btn.classList.remove('text-black', 'font-extrabold');
+        btn.classList.add('text-slate-400', 'font-medium');
       });
 
+      const activeIdx = screens.indexOf(screen);
+      const activeBtn = document.getElementById('nav-btn-' + screen);
       document.getElementById('screen-' + screen).classList.remove('hidden');
-      document.getElementById('nav-btn-' + screen).className = 'py-2 px-4 rounded-full text-black font-bold text-xs flex items-center gap-1.5 transition shadow';
-      document.getElementById('nav-btn-' + screen).style.background = 'var(--accent)';
+      activeBtn.classList.remove('text-slate-400', 'font-medium');
+      activeBtn.classList.add('text-black', 'font-extrabold');
+
+      // Slide liquid droplet
+      const slider = document.getElementById('bottom-nav-slider');
+      slider.style.transform = `translateX(${activeIdx * 100}%)`;
 
       if (screen === 'map') {
         initMap();
@@ -679,37 +1044,68 @@
       }
     }
 
+    // Hub Tab Navigation (Liquid Sliding Pill)
     function switchHubTab(tab) {
       const chatBtn = document.getElementById('hub-tab-chat');
       const splitBtn = document.getElementById('hub-tab-split');
       const chatView = document.getElementById('hub-view-chat');
       const splitView = document.getElementById('hub-view-split');
+      const slider = document.getElementById('hub-pill-slider');
 
       if (tab === 'chat') {
-        chatBtn.style.background = 'var(--accent)';
-        chatBtn.className = 'py-2 rounded-xl text-black transition shadow';
-        splitBtn.style.background = 'transparent';
-        splitBtn.className = 'py-2 rounded-xl text-slate-400 hover:text-white transition';
+        slider.style.transform = 'translateX(0%)';
+        chatBtn.classList.remove('text-slate-400', 'font-bold');
+        chatBtn.classList.add('text-black', 'font-extrabold');
+        splitBtn.classList.remove('text-black', 'font-extrabold');
+        splitBtn.classList.add('text-slate-400', 'font-bold');
         chatView.classList.remove('hidden');
         splitView.classList.add('hidden');
       } else {
-        splitBtn.style.background = 'var(--accent)';
-        splitBtn.className = 'py-2 rounded-xl text-black transition shadow';
-        chatBtn.style.background = 'transparent';
-        chatBtn.className = 'py-2 rounded-xl text-slate-400 hover:text-white transition';
+        slider.style.transform = 'translateX(100%)';
+        splitBtn.classList.remove('text-slate-400', 'font-bold');
+        splitBtn.classList.add('text-black', 'font-extrabold');
+        chatBtn.classList.remove('text-black', 'font-extrabold');
+        chatBtn.classList.add('text-slate-400', 'font-bold');
         splitView.classList.remove('hidden');
         chatView.classList.add('hidden');
         renderExpenses();
       }
     }
 
+    // Render Snaps with 3D cards and Waterdrop effect
     function renderSnaps() {
       const grid = document.getElementById('vault-grid');
       grid.innerHTML = snapsData.map((s, idx) => `
-        <div onclick="openFullscreenSnap(${idx})" class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group border border-white/10 hover:border-[#00FFA3]">
+        <div onclick="openFullscreenSnap(${idx})" class="relative aspect-square snap-card cursor-pointer group">
           <img src="${s.url}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end p-2">
+            <span class="text-[9px] font-bold text-white truncate">${s.caption}</span>
+          </div>
         </div>
       `).join('');
+    }
+
+    // Simulation: Snappen mit flüssiger Wassertropfen-Animation & Schockwelle
+    function uploadSnapSimulation() {
+      const newSnap = {
+        id: String(Date.now()),
+        url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+        caption: 'Neuer Snap Moment ✨',
+        author: myName,
+        time: 'Jetzt'
+      };
+
+      snapsData.unshift(newSnap);
+      renderSnaps();
+
+      // Apply waterdrop and shockwave to the first card
+      const firstCard = document.querySelector('#vault-grid .snap-card');
+      if (firstCard) {
+        firstCard.classList.add('waterdrop-animated');
+        const shockwave = document.createElement('div');
+        shockwave.className = 'shockwave-ripple';
+        firstCard.appendChild(shockwave);
+      }
     }
 
     function openFullscreenSnap(idx) {
@@ -718,13 +1114,15 @@
       document.getElementById('fs-image').src = snap.url;
       document.getElementById('fs-caption').innerText = snap.caption;
       document.getElementById('fs-meta').innerText = `Von ${snap.author} • ${snap.time} Uhr`;
-      document.getElementById('snap-fullscreen-modal').classList.remove('hidden');
-      document.getElementById('snap-fullscreen-modal').classList.add('flex');
+      const modal = document.getElementById('snap-fullscreen-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
     }
 
     function closeFullscreenSnap() {
-      document.getElementById('snap-fullscreen-modal').classList.add('hidden');
-      document.getElementById('snap-fullscreen-modal').classList.remove('flex');
+      const modal = document.getElementById('snap-fullscreen-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
 
     function deleteCurrentSnap() {
@@ -738,17 +1136,50 @@
     function renderExpenses() {
       const list = document.getElementById('expenses-list');
       list.innerHTML = expensesData.map(e => `
-        <div class="liquid-glass p-3.5 rounded-2xl flex justify-between items-center border border-white/10">
+        <div class="liquid-glass p-3.5 rounded-2xl flex justify-between items-center border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
           <div>
-            <p class="font-bold text-white text-xs">${e.title}</p>
-            <p class="text-[10px] text-slate-400">Bezahlt von: ${e.paidBy}</p>
+            <p class="font-extrabold text-white text-xs">${e.title}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">Bezahlt von: <span class="text-slate-300 font-semibold">${e.paidBy}</span></p>
           </div>
-          <div class="flex items-center space-x-2">
-            <span class="text-sm font-extrabold text-[#00FFA3]">€${e.total.toFixed(2)}</span>
-            <button onclick="expensesData = expensesData.filter(x => x.id !== '${e.id}'); renderExpenses();" class="text-red-400 p-1">🗑️</button>
+          <div class="flex items-center space-x-2.5">
+            <span class="text-sm font-extrabold font-mono" style="color: var(--accent)">€${e.total.toFixed(2)}</span>
+            <button onclick="expensesData = expensesData.filter(x => x.id !== '${e.id}'); renderExpenses();" class="w-7 h-7 rounded-lg glass-pill flex items-center justify-center text-red-400 hover:text-red-300 active:scale-95 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
           </div>
         </div>
       `).join('');
+    }
+
+    // Modal dummy handlers for members & leave
+    function openMembersModal() {
+      alert("👥 Crew-Mitglieder:\n- Louis (Admin, 92% Akku)\n- Jonas (84% Akku)\n- Sarah (4% Akku - Warnung aktiv)");
+    }
+
+    function confirmLeaveGroup() {
+      if (confirm("Möchtest du die Gruppe wirklich verlassen?")) {
+        alert("Gruppe verlassen.");
+      }
+    }
+
+    function openAddExpenseModal() {
+      const title = prompt("Titel der Ausgabe:", "Drinks im Club");
+      const amount = parseFloat(prompt("Gesamtbetrag in €:", "35.00"));
+      if (title && !isNaN(amount)) {
+        expensesData.push({
+          id: 'e' + Date.now(),
+          title: title,
+          total: amount,
+          paidBy: myName,
+          splitBetween: ['Louis', 'Jonas', 'Sarah']
+        });
+        renderExpenses();
+      }
+    }
+
+    function dismissNotification() {
+      document.getElementById('notification-banner').classList.add('hidden');
+      document.getElementById('notification-banner').classList.remove('flex');
     }
 
     initMap();
