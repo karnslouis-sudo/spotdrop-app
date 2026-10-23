@@ -29,18 +29,36 @@ jobs:
           rm -rf android
           flutter create . --platforms=android --org=com.spotdrop --project-name=spotdrop
 
-      - name: Configure Kotlin 1.9.22, Core Desugaring & Permissions
+      - name: Configure Kotlin, Core Desugaring & Permissions
         run: |
-          sed -i 's/1.7.10/1.9.22/g' android/settings.gradle || true
-          sed -i 's/1.8.22/1.9.22/g' android/settings.gradle || true
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml || true
           python3 -c "
-          with open('android/app/build.gradle', 'r') as f:
-              content = f.read()
-          content = content.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
-          content += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n'
-          with open('android/app/build.gradle', 'w') as f:
-              f.write(content)
+          import os
+          for p in ['android/settings.gradle', 'android/settings.gradle.kts']:
+              if os.path.exists(p):
+                  with open(p, 'r') as f:
+                      c = f.read()
+                  c = c.replace('1.7.10', '1.9.22').replace('1.8.22', '1.9.22')
+                  with open(p, 'w') as f:
+                      f.write(c)
+
+          for p in ['android/app/build.gradle', 'android/app/build.gradle.kts']:
+              if os.path.exists(p):
+                  with open(p, 'r') as f:
+                      c = f.read()
+                  if p.endswith('.kts'):
+                      if 'isCoreLibraryDesugaringEnabled' not in c:
+                          c = c.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
+                      if 'desugar_jdk_libs' not in c:
+                          c += '\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.0.4\")\n}\n'
+                  else:
+                      if 'coreLibraryDesugaringEnabled' not in c:
+                          c = c.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
+                      if 'desugar_jdk_libs' not in c:
+                          c += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n'
+                  with open(p, 'w') as f:
+                      f.write(c)
+          print('Successfully configured Android build files!')
           "
 
       - name: Get Dependencies
