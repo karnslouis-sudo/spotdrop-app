@@ -52,7 +52,6 @@ jobs:
               if os.path.exists(p):
                   with open(p, 'r') as f:
                       c = f.read()
-                  # Ensure minSdk is 23 for record package
                   c = c.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 23')
                   c = c.replace('minSdkVersion 21', 'minSdkVersion 23')
                   c = c.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
@@ -67,6 +66,19 @@ jobs:
                           c = c.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
                       if 'desugar_jdk_libs' not in c:
                           c += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n'
+                  with open(p, 'w') as f:
+                      f.write(c)
+
+          # Fix namespace for AGP 8+ on older plugins (like :record)
+          for p in ['android/build.gradle', 'android/build.gradle.kts']:
+              if os.path.exists(p):
+                  with open(p, 'r') as f:
+                      c = f.read()
+                  if 'subprojects' not in c:
+                      if p.endswith('.kts'):
+                          c += '\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {\n            if (namespace == null) {\n                namespace = \"com.spotdrop.${project.name}\"\n            }\n        }\n    }\n}\n'
+                      else:
+                          c += '\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty(\"android\")) {\n            project.android {\n                if (namespace == null) {\n                    namespace = \"com.spotdrop.${project.name}\"\n                }\n            }\n        }\n    }\n}\n'
                   with open(p, 'w') as f:
                       f.write(c)
           print('Successfully configured Android build files!')
@@ -121,7 +133,7 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Configure iOS Podfile Deployment Target
+      - name: Configure iOS Podfile Deployment Target & Disable Code Signing
         run: |
           python3 -c "
           import os
@@ -137,7 +149,17 @@ jobs:
                   c = 'platform :ios, \'13.0\'\n' + c
               with open(p, 'w') as f:
                   f.write(c)
-              print('iOS Podfile target set to 13.0')
+
+          # Disable code signing requirement for unsigned sideloading (AltStore / Sideloadly)
+          proj = 'ios/Runner.xcodeproj/project.pbxproj'
+          if os.path.exists(proj):
+              with open(proj, 'r') as f:
+                  c = f.read()
+              c = c.replace('CODE_SIGN_IDENTITY = \"iPhone Developer\";', 'CODE_SIGN_IDENTITY = \"\"; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO;')
+              c = c.replace('CODE_SIGNING_ALLOWED = YES;', 'CODE_SIGNING_ALLOWED = NO;')
+              with open(proj, 'w') as f:
+                  f.write(c)
+          print('Successfully patched iOS project files!')
           "
 
       - name: Build iOS App (Release No-Codesign)
@@ -155,4 +177,3 @@ jobs:
           name: spotdrop-ios-ipa
           path: Spotdrop.ipa
           retention-days: 14
-
