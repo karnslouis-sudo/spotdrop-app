@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +9,11 @@ import '../services/github_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/glass_container.dart';
 import 'call_screen.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
 
 class HubScreen extends StatefulWidget {
   final VoidCallback onChangeGroup;
@@ -30,13 +35,16 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   bool _isLoading = true;
   bool _isSending = false;
   
-  // Audio Voice Note State
+  // Real Audio Voice Note State
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _currentRecordingPath;
   bool _isRecordingVoice = false;
   int _voiceSeconds = 0;
   Timer? _voiceTimer;
   String? _currentlyPlayingAudioId;
-  int _audioPlaybackSeconds = 0;
-  Timer? _playbackTimer;
+  Duration _audioPosition = Duration.zero;
+  Duration _audioTotalDuration = Duration.zero;
 
   // Swipe-to-Reply State
   Map<String, dynamic>? _replyingToMessage;
@@ -49,13 +57,29 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     _tabController = TabController(length: 2, vsync: this);
     _loadAllData();
     _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) => _pollUpdates());
+
+    _audioPlayer.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _audioPosition = p);
+    });
+    _audioPlayer.onDurationChanged.listen((d) {
+      if (mounted) setState(() => _audioTotalDuration = d);
+    });
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _currentlyPlayingAudioId = null;
+          _audioPosition = Duration.zero;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _pollingTimer?.cancel();
     _voiceTimer?.cancel();
-    _playbackTimer?.cancel();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
     _tabController.dispose();
     _scrollController.dispose();
     _msgController.dispose();
@@ -250,19 +274,22 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
               ),
               title: Text(member, style: const TextStyle(color: Colors.white)),
               trailing: Icon(Icons.phone, color: accent, size: 20),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
-                service.initiateCall(receiver: member);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CallScreen(
-                      callerName: member,
-                      isIncoming: false,
-                      onEndCall: () => Navigator.pop(context),
+                final callId = await service.initiateCall(receiver: member);
+                if (mounted && callId != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CallScreen(
+                        callId: callId,
+                        callerName: member,
+                        isIncoming: false,
+                        onEndCall: () => Navigator.pop(context),
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
             )),
           ],
@@ -854,7 +881,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                   final isMe = msg['author'] == myName;
                                   final isSos = (msg['text'] as String?)?.contains('[NOTFALL') == true;
                                   final hasImg = msg['image_url'] != null;
-                                  final hasAudio = msg['audio_note'] != null;
+                                  final hasAudio = msg['audio_note'] != null || msg['audio_url'] != null || msg['audio_base64'] != null;
                                   final replyTo = msg['reply_to'] as Map<String, dynamic>?;
                                   final msgId = msg['id']?.toString() ?? '$index';
 
@@ -960,7 +987,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                             // FUNCTIONAL VOICE NOTE PLAYER
                                             if (hasAudio)
                                               GestureDetector(
-                                                onTap: () => _togglePlayAudio(msgId),
+                                                onTap: () => _togglePlayAudio(msg),
                                                 child: Container(
                                                   margin: const EdgeInsets.symmetric(vertical: 4),
                                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1206,3 +1233,5 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 }
+
+
