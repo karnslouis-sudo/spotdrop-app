@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/github_service.dart';
+import '../widgets/glass_container.dart';
 
 class VaultScreen extends StatefulWidget {
   const VaultScreen({super.key});
@@ -78,6 +79,101 @@ class _VaultScreenState extends State<VaultScreen> {
     }
   }
 
+  // VOLLBILD-VIEWER MIT PINCH-ZOOM & LÖSCH-FUNKTION
+  void _openFullScreenSnap(Map<String, dynamic> snap) {
+    final url = snap['image_url'] ?? '';
+    final author = snap['author'] ?? 'Anonymous';
+    final caption = snap['caption'] ?? '';
+    final timestamp = snap['timestamp'] ?? '';
+    final id = snap['id']?.toString() ?? '';
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black.withOpacity(0.6),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(caption.isNotEmpty ? caption : 'Snap', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                Text('Von $author • $timestamp', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                tooltip: 'Snap löschen',
+                onPressed: () {
+                  showDialog(
+                    context: ctx,
+                    builder: (dCtx) => AlertDialog(
+                      backgroundColor: const Color(0xFF141926),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.redAccent)),
+                      title: const Row(
+                        children: [
+                          Icon(Icons.delete_forever, color: Colors.redAccent),
+                          SizedBox(width: 8),
+                          Text('Snap löschen?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      content: const Text(
+                        'Möchtest du dieses Foto wirklich endgültig aus dem GitHub Tresor löschen?',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dCtx),
+                          child: const Text('Abbrechen', style: TextStyle(color: Colors.grey)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                          onPressed: () async {
+                            Navigator.pop(dCtx); // close dialog
+                            Navigator.pop(ctx);  // close fullscreen
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Lösche Foto vom Server...')),
+                            );
+                            await GitHubService().deleteSnap(id);
+                            await _fetchSnaps();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(backgroundColor: Colors.redAccent, content: Text('🗑️ Snap wurde dauerhaft gelöscht.')),
+                              );
+                            }
+                          },
+                          child: const Text('Endgültig löschen'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF00FFA3)),
+                ),
+                errorWidget: (_, __, ___) => const Center(
+                  child: Icon(Icons.broken_image, size: 60, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,7 +224,7 @@ class _VaultScreenState extends State<VaultScreen> {
                       ),
                     )
                   : GridView.builder(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 3,
                         crossAxisSpacing: 8,
@@ -139,24 +235,27 @@ class _VaultScreenState extends State<VaultScreen> {
                         final snap = _snaps[index];
                         final url = snap['image_url'] ?? '';
 
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: url,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                              color: const Color(0xFF161E2E),
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFA3)),
+                        return GestureDetector(
+                          onTap: () => _openFullScreenSnap(snap),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: url,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                color: const Color(0xFF161E2E),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFA3)),
+                                  ),
                                 ),
                               ),
-                            ),
-                            errorWidget: (_, __, ___) => Container(
-                              color: const Color(0xFF161E2E),
-                              child: const Icon(Icons.broken_image, color: Colors.grey),
+                              errorWidget: (_, __, ___) => Container(
+                                color: const Color(0xFF161E2E),
+                                child: const Icon(Icons.broken_image, color: Colors.grey),
+                              ),
                             ),
                           ),
                         );
@@ -182,12 +281,15 @@ class _VaultScreenState extends State<VaultScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isUploading ? null : () => _takeAndUploadSnap(ImageSource.camera),
-        backgroundColor: const Color(0xFF00FFA3),
-        foregroundColor: Colors.black,
-        icon: const Icon(Icons.camera_alt),
-        label: const Text('Reinsnappen', style: TextStyle(fontWeight: FontWeight.bold)),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80),
+        child: FloatingActionButton.extended(
+          onPressed: _isUploading ? null : () => _takeAndUploadSnap(ImageSource.camera),
+          backgroundColor: const Color(0xFF00FFA3),
+          foregroundColor: Colors.black,
+          icon: const Icon(Icons.camera_alt),
+          label: const Text('Reinsnappen', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
       ),
     );
   }
