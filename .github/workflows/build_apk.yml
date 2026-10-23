@@ -33,7 +33,7 @@ jobs:
         run: |
           sed -i 's/1.7.10/1.9.22/g' android/settings.gradle || true
           sed -i 's/1.8.22/1.9.22/g' android/settings.gradle || true
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
         run: flutter pub get
@@ -69,7 +69,9 @@ jobs:
         run: |
           plutil -insert NSCameraUsageDescription -string "Spotdrop benötigt Zugriff auf die Kamera für den Snap-Vault." ios/Runner/Info.plist || true
           plutil -insert NSLocationWhenInUseUsageDescription -string "Spotdrop benötigt deinen Standort für die Spot-Map." ios/Runner/Info.plist || true
+          plutil -insert NSLocationAlwaysAndWhenInUseUsageDescription -string "Spotdrop benötigt deinen Standort im Hintergrund für Notfallerkennung und Live-Tracking." ios/Runner/Info.plist || true
           plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
+          plutil -insert NSMicrophoneUsageDescription -string "Spotdrop benötigt Zugriff auf das Mikrofon für VoIP Audio-Anrufe und Sprachnachrichten." ios/Runner/Info.plist || true
 
       - name: Get Dependencies
         run: flutter pub get
