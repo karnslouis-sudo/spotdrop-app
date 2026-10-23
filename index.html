@@ -3,665 +3,630 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Spotdrop - Instagram Edition</title>
+  <title>Spotdrop - Signature Edition</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Leaflet CSS & JS for Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Grand+Hotel&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@600;700;800&display=swap');
 
     :root {
-      --ig-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-      --ig-blue: #0095f6;
-      --ig-blue-hover: #1877f2;
-      --ig-red: #ed4956;
-      --ig-border: #dbdbdb;
-      --ig-bg: #fafafa;
-      --ig-card: #ffffff;
-      --ig-text: #262626;
-      --ig-secondary: #8e8e8e;
-    }
-
-    body.dark {
-      --ig-border: #262626;
-      --ig-bg: #000000;
-      --ig-card: #121212;
-      --ig-text: #f5f5f5;
-      --ig-secondary: #a8a8a8;
+      --spot-primary: #00FFA3;
+      --spot-cyan: #00E5FF;
+      --spot-purple: #7000FF;
+      --spot-gradient: linear-gradient(135deg, #00FFA3 0%, #00E5FF 50%, #7000FF 100%);
+      --spot-glow: 0 0 25px rgba(0, 255, 163, 0.4);
+      --bg-dark: #070A11;
+      --surface-glass: rgba(14, 20, 32, 0.82);
+      --surface-border: rgba(255, 255, 255, 0.1);
+      --text-main: #FFFFFF;
+      --text-sub: #94A3B8;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #efefef;
-      color: var(--ig-text);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #030509;
+      color: var(--text-main);
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      letter-spacing: -0.015em;
     }
 
-    .ig-font {
-      font-family: 'Grand Hotel', cursive;
+    .brand-font {
+      font-family: 'Space Grotesk', sans-serif;
+      letter-spacing: -0.04em;
     }
 
-    /* Instagram Gradient Ring for Stories */
-    .story-ring {
-      background: var(--ig-gradient);
+    /* Spotdrop Glassmorphism */
+    .spot-glass {
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-border);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .spot-card {
+      background: rgba(18, 26, 42, 0.7);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .spot-card:hover {
+      border-color: rgba(0, 255, 163, 0.3);
+      box-shadow: 0 8px 30px rgba(0, 255, 163, 0.08);
+    }
+
+    /* Spotdrop Aurora Halo Ring for Stories/Drops */
+    .drop-ring {
+      background: var(--spot-gradient);
       padding: 2.5px;
       border-radius: 9999px;
       display: inline-block;
-      transition: transform 0.2s ease;
+      box-shadow: 0 0 16px rgba(0, 255, 163, 0.35);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .story-ring:active {
-      transform: scale(0.94);
+    .drop-ring:active {
+      transform: scale(0.92);
     }
-    .story-ring-inner {
-      background: var(--ig-card);
-      padding: 2px;
+    .drop-ring-inner {
+      background: #0B0F19;
+      padding: 2.5px;
       border-radius: 9999px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-
-    /* Unread story vs viewed story */
-    .story-ring.viewed {
-      background: #dbdbdb;
-    }
-    body.dark .story-ring.viewed {
-      background: #363636;
+    .drop-ring.viewed {
+      background: rgba(255, 255, 255, 0.18);
+      box-shadow: none;
     }
 
-    /* Hide scrollbars */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
+    /* Custom Scrollbars */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Water Drop Burst Animation on Double Tap */
+    @keyframes dropBurst {
+      0% { transform: scale(0) rotate(-15deg); opacity: 0; filter: drop-shadow(0 0 0px #00FFA3); }
+      50% { transform: scale(1.3) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 35px #00FFA3); }
+      100% { transform: scale(1) translateY(-20px); opacity: 0; }
     }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+    .animate-drop-burst {
+      animation: dropBurst 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
-    /* Heart Burst Animation */
-    @keyframes heartBurst {
-      0% { transform: scale(0); opacity: 0; }
-      50% { transform: scale(1.3); opacity: 0.95; }
-      100% { transform: scale(1); opacity: 0; }
+    /* Soundwave Radar Pulse for Calls */
+    @keyframes radarPulse {
+      0% { transform: scale(0.95); opacity: 0.9; }
+      100% { transform: scale(2.2); opacity: 0; }
     }
-    .animate-heart-burst {
-      animation: heartBurst 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    .radar-pulse-anim {
+      animation: radarPulse 1.8s infinite cubic-bezier(0.2, 0.8, 0.4, 1);
     }
 
-    /* Story Progress Bar */
-    @keyframes storyProgress {
+    /* Story Progress Line */
+    @keyframes storyTimerAnim {
       from { width: 0%; }
       to { width: 100%; }
     }
-    .story-progress-active {
-      animation: storyProgress 5s linear forwards;
-    }
-
-    /* Pulse Call Ring */
-    @keyframes ringPulse {
-      0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(1.8); opacity: 0; }
-    }
-    .ring-pulse-anim {
-      animation: ringPulse 1.6s infinite ease-out;
+    .story-line-active {
+      animation: storyTimerAnim 5s linear forwards;
     }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-0 sm:p-4 transition-colors duration-200">
+<body class="min-h-screen flex items-center justify-center p-0 sm:p-5 select-none">
 
-  <!-- Mobile Device Shell (Instagram iOS Style) -->
-  <div id="device-shell" class="w-full max-w-[430px] h-[100vh] sm:h-[900px] sm:max-h-[96vh] bg-[var(--ig-card)] sm:rounded-[44px] shadow-2xl flex flex-col overflow-hidden border border-[var(--ig-border)] relative">
+  <!-- Mobile Device Shell Frame -->
+  <div id="device-shell" class="w-full max-w-[430px] h-[100vh] sm:h-[910px] sm:max-h-[96vh] bg-[#070A11] sm:rounded-[46px] border border-white/10 shadow-[0_25px_80px_rgba(0,0,0,0.9),0_0_50px_rgba(0,255,163,0.06)] flex flex-col overflow-hidden relative">
 
-    <!-- Top Status Bar (iOS Look) -->
-    <div class="h-10 bg-[var(--ig-card)] flex items-center justify-between px-6 shrink-0 text-xs text-[var(--ig-text)] font-semibold border-b border-[var(--ig-border)]/50 z-30">
-      <span id="live-time">12:30</span>
-      <div class="flex items-center space-x-1.5">
-        <span class="text-[11px] font-bold text-emerald-500">Spotdrop v1.0.6</span>
-        <!-- Dark / Light Theme Toggle -->
-        <button onclick="toggleTheme()" class="p-1 text-[var(--ig-text)] hover:opacity-70" title="Dark/Light Mode">
-          <svg id="theme-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-        </button>
+    <!-- Top Status Bar -->
+    <div class="h-10 px-7 flex items-center justify-between shrink-0 text-xs text-slate-400 font-mono z-30 bg-[#070A11]/90 backdrop-blur-md border-b border-white/5">
+      <span id="live-time" class="font-bold text-white">12:30</span>
+      <div class="w-20 h-4 bg-black/60 rounded-b-xl flex items-center justify-center border-b border-white/10">
+        <div class="w-2 h-2 rounded-full bg-emerald-500/80 animate-pulse"></div>
+      </div>
+      <div class="flex items-center space-x-1.5 text-[11px] font-bold text-[#00FFA3]">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3]"></span>
+        <span>LIVE</span>
       </div>
     </div>
 
-    <!-- MAIN APP HEADER -->
-    <div id="app-header" class="h-12 bg-[var(--ig-card)] flex items-center justify-between px-4 border-b border-[var(--ig-border)] shrink-0 z-30">
-      <!-- Left: Camera Icon to Post Story -->
-      <button onclick="openStoryCreator()" class="p-1 text-[var(--ig-text)] hover:opacity-70 transition active:scale-95" title="Story posten">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+    <!-- SPOTDROP SIGNATURE HEADER -->
+    <div id="app-header" class="h-14 px-4 flex items-center justify-between shrink-0 z-30 bg-[#0A0E18]/85 backdrop-blur-xl border-b border-white/5">
+      <!-- Left: Create Drop Button -->
+      <button onclick="openDropCreator()" class="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition active:scale-95 flex items-center justify-center" title="Neuen Drop teilen">
+        <svg class="w-5 h-5 text-[#00FFA3]" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
         </svg>
       </button>
 
-      <!-- Center: Logo -->
-      <div class="flex items-center space-x-1 cursor-pointer" onclick="switchTab('feed')">
-        <span class="ig-font text-3xl text-[var(--ig-text)] tracking-wide">Spotdrop</span>
-        <span class="text-[9px] bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-bold px-1.5 py-0.5 rounded-full">CREW</span>
+      <!-- Center: Spotdrop Identity Brand -->
+      <div class="flex items-center space-x-2 cursor-pointer" onclick="switchNavTab('feed')">
+        <div class="w-7 h-7 rounded-xl bg-gradient-to-tr from-[#00FFA3] via-[#00E5FF] to-[#7000FF] flex items-center justify-center p-[1px] shadow-[0_0_15px_rgba(0,255,163,0.4)]">
+          <div class="w-full h-full bg-[#080C14] rounded-[11px] flex items-center justify-center">
+            <svg class="w-4 h-4 text-[#00FFA3]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center space-x-1">
+            <span class="brand-font text-xl font-extrabold text-white tracking-tight leading-none">SPOTDROP</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3] shadow-[0_0_8px_#00FFA3]"></span>
+          </div>
+          <span class="text-[9px] uppercase tracking-wider text-slate-400 font-bold -mt-0.5">Berlin Crew • SD-77K1</span>
+        </div>
       </div>
 
-      <!-- Right: Call & DM Icons -->
-      <div class="flex items-center space-x-3">
+      <!-- Right: VoIP Quick Call & Crew Hub -->
+      <div class="flex items-center space-x-2">
         <!-- Direct Instant VoIP Call -->
-        <button onclick="startInstantCall('Jonas')" class="p-1 text-[var(--ig-text)] hover:text-emerald-500 transition active:scale-95 relative" title="Instant Anruf">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
-          </svg>
-          <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+        <button onclick="startInstantCall('Jonas')" class="p-2 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[#00FFA3] transition active:scale-95 relative" title="Instant VoIP Call">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
+          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#00FFA3] rounded-full animate-ping"></span>
         </button>
 
-        <!-- Direct Message Paper Plane -->
-        <button onclick="switchTab('chat')" class="p-1 text-[var(--ig-text)] hover:opacity-70 transition active:scale-95 relative" title="Crew Chat">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+        <!-- Hub Chat Icon -->
+        <button onclick="switchNavTab('hub')" class="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition active:scale-95 relative" title="Crew Hub">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
           </svg>
-          <span id="unread-chat-badge" class="absolute -top-1 -right-1 bg-[var(--ig-red)] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">2</span>
+          <span class="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">2</span>
         </button>
       </div>
     </div>
 
-    <!-- CONTENT CONTAINER -->
-    <div class="flex-1 overflow-y-auto no-scrollbar relative bg-[var(--ig-bg)]">
+    <!-- MAIN SCROLLABLE CONTENT VIEWPORT -->
+    <div class="flex-1 overflow-y-auto no-scrollbar relative bg-[#070A11]">
 
       <!-- ============================================================== -->
-      <!-- TAB 1: INSTAGRAM FEED & STORIES                                -->
+      <!-- TAB 1: CREW DROPS & FEED (Clean Spotdrop Signature Look)        -->
       <!-- ============================================================== -->
-      <div id="tab-feed" class="flex flex-col pb-16">
+      <div id="tab-feed" class="flex flex-col pb-24">
         
-        <!-- STORIES TRAY (Matching screenshot right) -->
-        <div class="bg-[var(--ig-card)] border-b border-[var(--ig-border)] py-3 px-3 overflow-x-auto no-scrollbar flex items-center space-x-3.5">
+        <!-- LIVE DROPS HORIZONTAL TRAY (Stories) -->
+        <div class="py-3.5 px-3.5 border-b border-white/5 bg-[#0B0F19]/60 backdrop-blur-md overflow-x-auto no-scrollbar flex items-center space-x-4">
           
-          <!-- You / Deine Story (Add Button) -->
-          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openStoryCreator()">
+          <!-- You / Neuer Drop -->
+          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openDropCreator()">
             <div class="relative w-16 h-16">
-              <div class="w-16 h-16 rounded-full border-2 border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center">
-                <img id="my-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+              <div class="w-16 h-16 rounded-full border-2 border-dashed border-[#00FFA3]/50 p-[2px] bg-slate-900/60 flex items-center justify-center">
+                <img id="my-avatar-drop" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80" class="w-full h-full rounded-full object-cover">
               </div>
-              <div class="absolute bottom-0 right-0 w-5 h-5 bg-[var(--ig-blue)] rounded-full flex items-center justify-center text-white border-2 border-[var(--ig-card)] font-bold text-xs shadow-sm">
+              <div class="absolute bottom-0 right-0 w-5 h-5 bg-[#00FFA3] text-black rounded-full flex items-center justify-center font-extrabold text-xs shadow-[0_0_10px_#00FFA3] border-2 border-[#070A11]">
                 +
               </div>
             </div>
-            <span class="text-[11px] text-[var(--ig-text)] font-medium mt-1 truncate max-w-[64px]">Deine Story</span>
+            <span class="text-[11px] text-slate-300 font-semibold mt-1.5 truncate max-w-[64px]">Dein Drop</span>
           </div>
 
-          <!-- Stories from Crew Members (Dynamic) -->
-          <div id="stories-list" class="flex items-center space-x-3.5"></div>
+          <!-- Dynamic Crew Drops -->
+          <div id="drops-tray-container" class="flex items-center space-x-4"></div>
         </div>
 
-        <!-- FEED POSTS LIST -->
-        <div id="feed-posts" class="flex flex-col space-y-3 pt-2"></div>
+        <!-- POSTS FEED -->
+        <div id="crew-feed-container" class="p-3.5 flex flex-col space-y-4"></div>
       </div>
 
       <!-- ============================================================== -->
-      <!-- TAB 2: EXPLORE / SPOTS MAP (Clean Modern Map View)             -->
+      <!-- TAB 2: RADAR & GPS SPOTS (Spotdrop Interactive Map)            -->
       <!-- ============================================================== -->
-      <div id="tab-map" class="hidden h-full flex flex-col relative pb-16">
-        <!-- Map Header -->
-        <div class="bg-[var(--ig-card)] p-3 border-b border-[var(--ig-border)] flex items-center justify-between z-10">
+      <div id="tab-radar" class="hidden h-full flex flex-col relative pb-20">
+        <!-- Radar Top Bar -->
+        <div class="p-3 bg-[#0B0F19]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between z-10">
           <div>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ig-secondary)]">Spotdrop GPS Radar</h2>
-            <p class="text-sm font-extrabold text-[var(--ig-text)]">Berlin Crew Spots (3 Live)</p>
+            <span class="text-[10px] uppercase tracking-widest text-[#00FFA3] font-bold flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-[#00FFA3] animate-ping"></span> Live GPS Radar
+            </span>
+            <h2 class="text-sm font-extrabold text-white">Berlin Crew Spots (3 Aktiv)</h2>
           </div>
           <div class="flex items-center space-x-2">
-            <button onclick="centerMapOnMe()" class="px-2.5 py-1 bg-[var(--ig-card)] border border-[var(--ig-border)] rounded-full text-xs font-semibold text-[var(--ig-text)] shadow-sm active:scale-95">
-              🎯 Mein Standort
+            <button onclick="centerMapOnMe()" class="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl text-xs font-semibold text-white shadow-sm active:scale-95">
+              🎯 Mein Ort
             </button>
-            <button onclick="dropSpotHere()" class="px-2.5 py-1 bg-[var(--ig-blue)] text-white rounded-full text-xs font-semibold shadow-sm active:scale-95">
-              + Spot markieren
+            <button onclick="dropSpotHere()" class="px-3 py-1.5 bg-gradient-to-r from-[#00FFA3] to-[#00E5FF] text-black font-extrabold text-xs rounded-xl shadow-[0_0_15px_rgba(0,255,163,0.3)] active:scale-95">
+              + Spot droppen
             </button>
           </div>
         </div>
 
-        <!-- Interactive Map Container -->
-        <div id="leaflet-map" class="flex-1 w-full h-full"></div>
+        <!-- Map Viewport -->
+        <div id="spotdrop-map" class="flex-1 w-full h-full"></div>
 
-        <!-- Emergency SOS Floating Button -->
-        <button onclick="triggerEmergency()" class="absolute bottom-20 right-4 z-20 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-xs flex items-center space-x-1.5 shadow-lg active:scale-95 animate-pulse">
-          <span>🚨 NOTFALL SOS</span>
+        <!-- Emergency SOS Floating Trigger -->
+        <button onclick="triggerEmergencySOS()" class="absolute bottom-24 right-4 z-20 px-4 py-2.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-2xl font-bold text-xs flex items-center space-x-2 shadow-[0_0_25px_rgba(225,29,72,0.6)] backdrop-blur-md border border-rose-400/40 active:scale-95 animate-pulse">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V8h2v4z"/></svg>
+          <span>NOTFALL SOS</span>
         </button>
       </div>
 
       <!-- ============================================================== -->
-      <!-- TAB 3: CREATE POST / SNAP MODAL                               -->
+      <!-- TAB 3: NEW DROP / SNAP CREATOR (Neuer Drop teilen)             -->
       <!-- ============================================================== -->
-      <div id="tab-create" class="hidden p-4 pb-20 flex flex-col space-y-4">
-        <div class="bg-[var(--ig-card)] p-5 rounded-2xl border border-[var(--ig-border)] shadow-sm">
-          <h2 class="text-lg font-bold text-[var(--ig-text)] mb-1">Neuen Beitrag teilen</h2>
-          <p class="text-xs text-[var(--ig-secondary)] mb-4">Wähle ein Foto aus und teile es mit deiner Crew.</p>
-
-          <!-- Upload / Preview Box -->
-          <div onclick="document.getElementById('post-file-input').click()" class="aspect-square w-full rounded-xl border-2 border-dashed border-[var(--ig-border)] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 relative overflow-hidden bg-slate-100">
-            <img id="post-preview-img" src="" class="w-full h-full object-cover hidden">
-            <div id="post-placeholder" class="text-center p-4">
-              <svg class="w-12 h-12 text-[var(--ig-secondary)] mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
-              </svg>
-              <p class="text-xs font-semibold text-[var(--ig-text)]">Foto auswählen oder hier ablegen</p>
-              <p class="text-[10px] text-[var(--ig-secondary)] mt-1">PNG, JPG bis zu 10MB</p>
+      <div id="tab-create" class="hidden p-4 pb-24 flex flex-col space-y-4">
+        <div class="spot-card p-5 border border-white/10">
+          <div class="flex items-center space-x-2.5 mb-3">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-r from-[#00FFA3] to-[#00E5FF] flex items-center justify-center text-black font-bold">
+              💧
             </div>
-            <input type="file" id="post-file-input" accept="image/*" class="hidden" onchange="previewPostImage(event)">
+            <div>
+              <h2 class="text-sm font-extrabold text-white">Neuen Drop teilen</h2>
+              <p class="text-[11px] text-slate-400">Teile ein Foto oder eine 24h Story mit deiner Crew.</p>
+            </div>
+          </div>
+
+          <!-- Photo Picker Box -->
+          <div onclick="document.getElementById('creator-file-input').click()" class="aspect-square w-full rounded-2xl border-2 border-dashed border-white/15 hover:border-[#00FFA3]/50 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group bg-black/40 transition">
+            <img id="creator-img-preview" src="" class="w-full h-full object-cover hidden">
+            <div id="creator-placeholder" class="text-center p-6">
+              <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#00FFA3] mx-auto mb-3 group-hover:scale-110 transition">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+                </svg>
+              </div>
+              <p class="text-xs font-bold text-white">Foto aufnehmen oder hochladen</p>
+              <p class="text-[10px] text-slate-400 mt-1">HD Snap Vault & Live Drop</p>
+            </div>
+            <input type="file" id="creator-file-input" accept="image/*" class="hidden" onchange="handleCreatorImage(event)">
           </div>
 
           <!-- Caption Input -->
           <div class="mt-4">
-            <textarea id="post-caption-input" rows="2" placeholder="Schreibe eine Bildunterschrift..." class="w-full text-xs p-3 rounded-lg border border-[var(--ig-border)] bg-[var(--ig-bg)] text-[var(--ig-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ig-blue)] resize-none"></textarea>
+            <input type="text" id="creator-caption-input" placeholder="Drop-Notiz oder Spot-Titel hinzufügen..." class="w-full text-xs p-3 rounded-xl bg-black/50 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-[#00FFA3]">
           </div>
 
-          <!-- Submit Buttons -->
-          <div class="flex space-x-2 mt-4">
-            <button onclick="publishNewPost()" class="flex-1 py-2.5 bg-[var(--ig-blue)] hover:bg-[var(--ig-blue-hover)] text-white text-xs font-bold rounded-lg transition active:scale-95 shadow-sm">
-              Im Feed teilen
+          <!-- Dual Publish Options -->
+          <div class="grid grid-cols-2 gap-2.5 mt-4">
+            <button onclick="publishFeedDrop()" class="py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl text-xs font-bold text-white transition active:scale-95">
+              Im Feed posten
             </button>
-            <button onclick="publishNewStoryFromCreate()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white text-xs font-bold rounded-lg transition active:scale-95 shadow-sm">
-              In Story teilen
+            <button onclick="publishStoryDrop()" class="py-2.5 px-3 bg-gradient-to-r from-[#00FFA3] via-[#00E5FF] to-[#7000FF] text-black font-extrabold text-xs rounded-xl shadow-[0_0_20px_rgba(0,255,163,0.3)] transition active:scale-95">
+              In Live-Drop (24h)
             </button>
           </div>
         </div>
       </div>
 
       <!-- ============================================================== -->
-      <!-- TAB 4: DIRECT CHAT / VOIP CALLS (Übersichtlich & Fast)         -->
+      <!-- TAB 4: CREW HUB (Chat, Waveform Voice & Split)                  -->
       <!-- ============================================================== -->
-      <div id="tab-chat" class="hidden h-full flex flex-col pb-16">
-        <!-- Chat Header -->
-        <div class="bg-[var(--ig-card)] p-3 border-b border-[var(--ig-border)] flex items-center justify-between shrink-0">
+      <div id="tab-hub" class="hidden h-full flex flex-col pb-20">
+        <!-- Hub Top Header -->
+        <div class="p-3.5 bg-[#0B0F19]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between shrink-0">
           <div class="flex items-center space-x-2.5">
-            <div class="w-9 h-9 rounded-full bg-slate-200 overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#00FFA3] to-[#00E5FF] p-[1.5px]">
+              <div class="w-full h-full bg-[#080C14] rounded-[10px] flex items-center justify-center">
+                <span class="text-xs font-bold text-[#00FFA3]">SD</span>
+              </div>
             </div>
             <div>
-              <h3 class="text-xs font-bold text-[var(--ig-text)]">Crew-Chat • Berlin Nightout</h3>
-              <p class="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> 3 Mitglieder online
+              <h3 class="text-xs font-bold text-white">Berlin Nightout Hub</h3>
+              <p class="text-[10px] text-[#00FFA3] font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3] animate-pulse"></span> 3 Crew Mitglieder online
               </p>
             </div>
           </div>
-          <!-- Fast Direct Call Button -->
-          <button onclick="startInstantCall('Crew (Alle)')" class="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition active:scale-95 flex items-center gap-1 text-xs font-bold" title="Sofort Anrufen">
-            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
+          <!-- Fast VoIP Call Trigger -->
+          <button onclick="startInstantCall('Crew (Alle)')" class="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[#00FFA3] text-xs font-bold flex items-center gap-1.5 active:scale-95 transition">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
             <span>Anrufen</span>
           </button>
         </div>
 
-        <!-- Chat Messages Scroll Area -->
-        <div id="chat-messages-container" class="flex-1 p-3 overflow-y-auto space-y-3 text-xs">
-          <!-- Incoming -->
-          <div class="flex items-end space-x-2 max-w-[80%]">
-            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&auto=format&fit=crop&q=80" class="w-6 h-6 rounded-full mb-1">
-            <div class="bg-[var(--ig-card)] border border-[var(--ig-border)] text-[var(--ig-text)] p-2.5 rounded-2xl rounded-bl-none shadow-sm">
+        <!-- Chat Messages -->
+        <div id="hub-chat-container" class="flex-1 p-3.5 overflow-y-auto space-y-3 text-xs">
+          <!-- Inbound Message -->
+          <div class="flex items-end space-x-2 max-w-[85%]">
+            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&auto=format&fit=crop&q=80" class="w-6 h-6 rounded-full mb-1 border border-white/20">
+            <div class="bg-[#121A2A] border border-white/10 text-white p-3 rounded-2xl rounded-bl-none shadow-sm">
               <span class="text-[10px] font-bold text-slate-400 block mb-0.5">Jonas • 20:12</span>
-              Treffpunkt steht! Wer ist schon am Rooftop? 🍸
+              Treffpunkt steht am Rooftop! Spot ist auf dem Radar markiert 📍🍸
             </div>
           </div>
 
-          <!-- Outgoing -->
-          <div class="flex items-end justify-end space-x-2 ml-auto max-w-[80%]">
-            <div class="bg-[var(--ig-blue)] text-white p-2.5 rounded-2xl rounded-br-none shadow-sm">
+          <!-- Outbound Message -->
+          <div class="flex items-end justify-end space-x-2 ml-auto max-w-[85%]">
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 rounded-2xl rounded-br-none shadow-md">
               <span class="text-[10px] text-white/70 block mb-0.5">Du • 20:14</span>
-              Ich bin in 5 Minuten da! Hab den Spot auf der Map markiert 📍
+              Bin in 5 Minuten da! Hab den neuen Spot im Feed geteilt ⚡
             </div>
           </div>
 
-          <!-- Voice Memo Message -->
-          <div class="flex items-end space-x-2 max-w-[80%]">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&auto=format&fit=crop&q=80" class="w-6 h-6 rounded-full mb-1">
-            <div class="bg-[var(--ig-card)] border border-[var(--ig-border)] text-[var(--ig-text)] p-2.5 rounded-2xl rounded-bl-none shadow-sm flex items-center space-x-2.5">
-              <button onclick="toggleVoiceAudio(this)" class="w-8 h-8 rounded-full bg-[var(--ig-blue)] text-white flex items-center justify-center shrink-0 active:scale-95">
-                <svg class="w-4 h-4 fill-current ml-0.5 play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <svg class="w-4 h-4 fill-current pause-icon hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <!-- Voice Memo -->
+          <div class="flex items-end space-x-2 max-w-[85%]">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&auto=format&fit=crop&q=80" class="w-6 h-6 rounded-full mb-1 border border-white/20">
+            <div class="bg-[#121A2A] border border-white/10 text-white p-3 rounded-2xl rounded-bl-none shadow-sm flex items-center space-x-3">
+              <button onclick="toggleVoicePlay(this)" class="w-8 h-8 rounded-full bg-[#00FFA3] text-black flex items-center justify-center shrink-0 active:scale-95 shadow-[0_0_10px_#00FFA3]">
+                <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </button>
               <div class="flex flex-col">
                 <div class="flex items-center space-x-1 h-4">
-                  <span class="w-1 h-2 bg-slate-300 rounded-full animate-pulse"></span>
-                  <span class="w-1 h-3.5 bg-slate-400 rounded-full"></span>
-                  <span class="w-1 h-2 bg-slate-300 rounded-full"></span>
-                  <span class="w-1 h-4 bg-[var(--ig-blue)] rounded-full"></span>
-                  <span class="w-1 h-2.5 bg-slate-300 rounded-full"></span>
-                  <span class="w-1 h-3 bg-slate-400 rounded-full"></span>
+                  <span class="w-1 h-2 bg-emerald-400/50 rounded-full animate-pulse"></span>
+                  <span class="w-1 h-4 bg-[#00FFA3] rounded-full"></span>
+                  <span class="w-1 h-3 bg-emerald-400/70 rounded-full"></span>
+                  <span class="w-1 h-5 bg-[#00FFA3] rounded-full"></span>
+                  <span class="w-1 h-2 bg-emerald-400/50 rounded-full"></span>
                 </div>
-                <span class="text-[9px] text-[var(--ig-secondary)] mt-0.5">Sarah • 0:14</span>
+                <span class="text-[9px] text-slate-400 mt-1">Sarah • Sprachmemo (0:14)</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Chat Input Bar -->
-        <div class="p-2.5 bg-[var(--ig-card)] border-t border-[var(--ig-border)] flex items-center space-x-2 shrink-0">
-          <input type="text" id="chat-input-text" placeholder="Nachricht schreiben..." class="flex-1 text-xs py-2 px-3 rounded-full bg-[var(--ig-bg)] border border-[var(--ig-border)] text-[var(--ig-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ig-blue)]" onkeydown="if(event.key==='Enter') sendChatMsg()">
-          <button onclick="sendChatMsg()" class="text-[var(--ig-blue)] font-bold text-xs px-2 py-1 hover:opacity-70 transition active:scale-95">
-            Senden
+        <div class="p-3 bg-[#0B0F19]/90 border-t border-white/10 flex items-center space-x-2 shrink-0">
+          <input type="text" id="hub-input-text" placeholder="Nachricht an die Crew..." class="flex-1 text-xs py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-[#00FFA3]" onkeydown="if(event.key==='Enter') sendHubMsg()">
+          <button onclick="sendHubMsg()" class="p-2.5 bg-[#00FFA3] text-black font-extrabold rounded-xl text-xs hover:bg-[#00FFA3]/90 transition active:scale-95">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </div>
       </div>
 
       <!-- ============================================================== -->
-      <!-- TAB 5: PROFILE (Exact layout matching screenshot left)         -->
+      <!-- TAB 5: PROFILE & SNAP VAULT (Spotdrop Persona)                 -->
       <!-- ============================================================== -->
-      <div id="tab-profile" class="hidden flex flex-col pb-16">
+      <div id="tab-profile" class="hidden flex flex-col pb-24">
         
-        <!-- Profile Top Bar (Lock + Username + Verified + Menu) -->
-        <div class="h-11 px-4 flex items-center justify-between border-b border-[var(--ig-border)] bg-[var(--ig-card)]">
-          <div class="flex items-center space-x-1 font-bold text-sm text-[var(--ig-text)]">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-            </svg>
-            <span id="profile-username">louis.karns</span>
-            <svg class="w-3.5 h-3.5 text-[var(--ig-blue)] fill-current" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            <svg class="w-3 h-3 text-[var(--ig-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
-            </svg>
+        <!-- Profile Top Bar -->
+        <div class="h-12 px-4 flex items-center justify-between border-b border-white/10 bg-[#0B0F19]/80 backdrop-blur-md">
+          <div class="flex items-center space-x-2">
+            <div class="w-2 h-2 rounded-full bg-[#00FFA3]"></div>
+            <span id="profile-tag-name" class="font-extrabold text-sm text-white">louis.karns</span>
+            <span class="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-slate-300 font-mono">SD-77K1</span>
           </div>
-
-          <div class="flex items-center space-x-3 text-[var(--ig-text)]">
-            <button onclick="shareGroupCode()" title="Crew Code teilen">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
-              </svg>
-            </button>
-            <button onclick="openMenuModal()">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
-              </svg>
-            </button>
-          </div>
+          <button onclick="shareCrewCode()" class="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300" title="Crew-Code teilen">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
+            </svg>
+          </button>
         </div>
 
-        <!-- Profile Bio & Stats (Exact replica of screenshot left) -->
-        <div class="p-4 bg-[var(--ig-card)] border-b border-[var(--ig-border)]">
+        <!-- Persona Header Info -->
+        <div class="p-4 bg-[#0A0E18]/60 border-b border-white/5">
           <div class="flex items-center justify-between">
-            <!-- Large Avatar with Story Ring and Blue + Badge -->
-            <div class="relative cursor-pointer" onclick="openStoryCreator()">
-              <div class="w-20 h-20 rounded-full border border-slate-200 overflow-hidden bg-slate-100">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
-              </div>
-              <div class="absolute bottom-0 right-0 w-6 h-6 bg-[var(--ig-blue)] rounded-full flex items-center justify-center text-white border-2 border-[var(--ig-card)] font-bold text-sm shadow-sm">
-                +
+            <!-- Large Persona Avatar with Drop Halo -->
+            <div class="drop-ring p-[2px] cursor-pointer" onclick="openDropCreator()">
+              <div class="drop-ring-inner p-[2px]">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80" class="w-18 h-18 rounded-full object-cover">
               </div>
             </div>
 
-            <!-- Stats Counts -->
-            <div class="flex items-center space-x-6 text-center pr-2">
-              <div>
-                <span id="profile-stat-posts" class="block font-bold text-base text-[var(--ig-text)]">24</span>
-                <span class="text-[11px] text-[var(--ig-secondary)]">Beiträge</span>
+            <!-- Stats Hologram Pills -->
+            <div class="flex items-center space-x-3 text-center">
+              <div class="bg-white/5 border border-white/10 px-3 py-2 rounded-2xl min-w-[70px]">
+                <span id="vault-count-stat" class="block font-black text-sm text-[#00FFA3]">6</span>
+                <span class="text-[10px] text-slate-400 font-semibold uppercase">Snaps</span>
               </div>
-              <div>
-                <span class="block font-bold text-base text-[var(--ig-text)]">4</span>
-                <span class="text-[11px] text-[var(--ig-secondary)]">Crew</span>
+              <div class="bg-white/5 border border-white/10 px-3 py-2 rounded-2xl min-w-[70px]">
+                <span class="block font-black text-sm text-white">4</span>
+                <span class="text-[10px] text-slate-400 font-semibold uppercase">Crew</span>
               </div>
-              <div>
-                <span class="block font-bold text-base text-[var(--ig-text)]">8</span>
-                <span class="text-[11px] text-[var(--ig-secondary)]">Spots</span>
+              <div class="bg-white/5 border border-white/10 px-3 py-2 rounded-2xl min-w-[70px]">
+                <span class="block font-black text-sm text-[#00E5FF]">8</span>
+                <span class="text-[10px] text-slate-400 font-semibold uppercase">Spots</span>
               </div>
             </div>
           </div>
 
-          <!-- Bio Text -->
-          <div class="mt-3 text-xs leading-relaxed">
-            <h4 class="font-bold text-[var(--ig-text)]">Louis Karns</h4>
-            <p class="text-[var(--ig-secondary)]">Spotdrop Crew • Berlin Nightout (SD-77K1)</p>
-            <p class="text-[var(--ig-text)] mt-0.5">📸 Live Snap Vault & Real-Time Tracking</p>
+          <!-- Persona Bio -->
+          <div class="mt-3.5 text-xs">
+            <h4 class="font-extrabold text-white text-sm">Louis Karns</h4>
+            <p class="text-slate-400 mt-0.5">Crew Admin • Spotdrop Live Radar & Snap Vault</p>
           </div>
 
-          <!-- Edit Profile Button -->
-          <div class="mt-4 flex space-x-2">
-            <button onclick="editProfileName()" class="flex-1 py-1.5 bg-[var(--ig-card)] hover:bg-slate-50 border border-[var(--ig-border)] rounded-md text-xs font-semibold text-[var(--ig-text)] text-center transition active:scale-95 shadow-sm">
-              Profil bearbeiten
+          <!-- Action Pills -->
+          <div class="mt-3.5 flex space-x-2">
+            <button onclick="shareCrewCode()" class="flex-1 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-[#00FFA3]/40 rounded-xl text-xs font-bold text-[#00FFA3] transition active:scale-95 flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+              <span>Code: SD-77K1</span>
             </button>
-            <button onclick="shareGroupCode()" class="flex-1 py-1.5 bg-[var(--ig-card)] hover:bg-slate-50 border border-[var(--ig-border)] rounded-md text-xs font-semibold text-[var(--ig-text)] text-center transition active:scale-95 shadow-sm">
-              Gruppe teilen
+            <button onclick="renameUserPrompt()" class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition active:scale-95">
+              Profil anpassen
             </button>
           </div>
         </div>
 
-        <!-- Story Highlights (Matching Screenshot Left) -->
-        <div class="py-3 px-4 bg-[var(--ig-card)] border-b border-[var(--ig-border)] flex items-center space-x-4 overflow-x-auto no-scrollbar">
-          <!-- + New -->
-          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openStoryCreator()">
-            <div class="w-14 h-14 rounded-full border border-[var(--ig-border)] flex items-center justify-center bg-[var(--ig-card)] hover:bg-slate-50">
-              <span class="text-xl font-light text-[var(--ig-text)]">+</span>
+        <!-- Highlight Drops Horizontal -->
+        <div class="py-3 px-4 bg-[#080C14]/80 border-b border-white/5 flex items-center space-x-3.5 overflow-x-auto no-scrollbar">
+          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openDropCreator()">
+            <div class="w-13 h-13 rounded-2xl bg-white/5 border border-dashed border-[#00FFA3]/50 flex items-center justify-center text-[#00FFA3] font-bold text-lg p-3">
+              +
             </div>
-            <span class="text-[11px] text-[var(--ig-text)] mt-1">Neu</span>
+            <span class="text-[10px] text-slate-400 font-semibold mt-1">Neu</span>
           </div>
 
-          <!-- Highlight 1: Spots -->
-          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="switchTab('map')">
-            <div class="w-14 h-14 rounded-full border border-[var(--ig-border)] flex items-center justify-center bg-slate-100 overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=100&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="switchNavTab('radar')">
+            <div class="w-13 h-13 rounded-2xl bg-slate-900 border border-white/10 overflow-hidden p-0.5">
+              <img src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=100&auto=format&fit=crop&q=80" class="w-full h-full rounded-xl object-cover">
             </div>
-            <span class="text-[11px] text-[var(--ig-text)] mt-1">Spots 📍</span>
+            <span class="text-[10px] text-slate-300 font-semibold mt-1">Spots 📍</span>
           </div>
 
-          <!-- Highlight 2: Snaps -->
-          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="viewVaultFullscreen(0)">
-            <div class="w-14 h-14 rounded-full border border-[var(--ig-border)] flex items-center justify-center bg-slate-100 overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=100&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+          <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openDropViewer(0)">
+            <div class="w-13 h-13 rounded-2xl bg-slate-900 border border-white/10 overflow-hidden p-0.5">
+              <img src="https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=100&auto=format&fit=crop&q=80" class="w-full h-full rounded-xl object-cover">
             </div>
-            <span class="text-[11px] text-[var(--ig-text)] mt-1">Tresor</span>
+            <span class="text-[10px] text-slate-300 font-semibold mt-1">Vault 🔒</span>
           </div>
         </div>
 
-        <!-- 3x3 Photo Grid Tabs (Grid vs Tagged) -->
-        <div class="h-11 bg-[var(--ig-card)] border-b border-[var(--ig-border)] flex">
-          <button class="flex-1 flex items-center justify-center border-b-2 border-[var(--ig-text)] text-[var(--ig-text)]">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="14" y="14" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-            </svg>
-          </button>
-          <button class="flex-1 flex items-center justify-center text-[var(--ig-secondary)] hover:text-[var(--ig-text)]">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-            </svg>
-          </button>
+        <!-- Snap-Vault Grid Title -->
+        <div class="px-4 py-2 bg-[#070A11] flex items-center justify-between text-xs font-bold text-slate-400">
+          <span>SNAP-VAULT TRESOR</span>
+          <span class="text-[10px] text-[#00FFA3]">Cloud-Gesichert</span>
         </div>
 
-        <!-- 3-Column Photo Grid (Matching Screenshot Left) -->
-        <div id="profile-grid" class="grid grid-cols-3 gap-0.5 bg-[var(--ig-border)] p-0.5"></div>
+        <!-- 3x3 Photo Grid -->
+        <div id="vault-grid-container" class="grid grid-cols-3 gap-1 p-1 bg-[#070A11]"></div>
       </div>
 
     </div>
 
-    <!-- BOTTOM NAVIGATION BAR (Exact replica of Instagram iOS) -->
-    <div class="h-12 bg-[var(--ig-card)] border-t border-[var(--ig-border)] flex items-center justify-around px-2 shrink-0 z-30">
+    <!-- FLOATING SIGNATURE DOCK NAVIGATION (Futuristic Pill Bar) -->
+    <div class="absolute bottom-3 left-4 right-4 h-16 bg-[#0E1524]/90 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.8),0_0_20px_rgba(0,255,163,0.06)] flex items-center justify-around px-2 z-30">
       
-      <!-- 1. Home / Feed -->
-      <button onclick="switchTab('feed')" id="nav-btn-feed" class="p-2 text-[var(--ig-text)] transition active:scale-90" title="Home Feed">
-        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      <!-- 1. Feed / Drops -->
+      <button onclick="switchNavTab('feed')" id="dock-btn-feed" class="flex flex-col items-center justify-center p-2 text-[#00FFA3] transition active:scale-90">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
         </svg>
+        <span class="text-[9px] font-bold mt-0.5">Feed</span>
       </button>
 
-      <!-- 2. Search / Map -->
-      <button onclick="switchTab('map')" id="nav-btn-map" class="p-2 text-[var(--ig-secondary)] hover:text-[var(--ig-text)] transition active:scale-90" title="Radar Map">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+      <!-- 2. Radar Map -->
+      <button onclick="switchNavTab('radar')" id="dock-btn-radar" class="flex flex-col items-center justify-center p-2 text-slate-400 hover:text-white transition active:scale-90">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v18M3 12h18"/>
+          <circle cx="12" cy="12" r="3" fill="currentColor"/>
         </svg>
+        <span class="text-[9px] font-bold mt-0.5">Radar</span>
       </button>
 
-      <!-- 3. Add Post / Story (+) -->
-      <button onclick="switchTab('create')" id="nav-btn-create" class="p-2 text-[var(--ig-secondary)] hover:text-[var(--ig-text)] transition active:scale-90" title="Beitrag erstellen">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <rect x="3" y="3" width="18" height="18" rx="5" ry="5"/>
-          <line x1="12" y1="8" x2="12" y2="16"/>
-          <line x1="8" y1="12" x2="16" y2="12"/>
-        </svg>
-      </button>
-
-      <!-- 4. Direct / Activity (Heart or Chat) -->
-      <button onclick="switchTab('chat')" id="nav-btn-chat" class="p-2 text-[var(--ig-secondary)] hover:text-[var(--ig-text)] transition active:scale-90 relative" title="Crew Chat">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
-        </svg>
-      </button>
-
-      <!-- 5. Profile Tab -->
-      <button onclick="switchTab('profile')" id="nav-btn-profile" class="p-1 transition active:scale-90" title="Profil">
-        <div class="w-6 h-6 rounded-full border-2 border-transparent overflow-hidden" id="nav-profile-ring">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+      <!-- 3. Add Drop Center Button -->
+      <button onclick="switchNavTab('create')" id="dock-btn-create" class="w-11 h-11 rounded-xl bg-gradient-to-tr from-[#00FFA3] via-[#00E5FF] to-[#7000FF] p-[1.5px] shadow-[0_0_20px_rgba(0,255,163,0.4)] transition active:scale-90">
+        <div class="w-full h-full bg-[#080C14] hover:bg-transparent rounded-[9px] flex items-center justify-center text-white transition">
+          <svg class="w-6 h-6 text-[#00FFA3]" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+          </svg>
         </div>
+      </button>
+
+      <!-- 4. Crew Hub -->
+      <button onclick="switchNavTab('hub')" id="dock-btn-hub" class="flex flex-col items-center justify-center p-2 text-slate-400 hover:text-white transition active:scale-90 relative">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+        </svg>
+        <span class="text-[9px] font-bold mt-0.5">Hub</span>
+      </button>
+
+      <!-- 5. Persona / Profile -->
+      <button onclick="switchNavTab('profile')" id="dock-btn-profile" class="flex flex-col items-center justify-center p-2 text-slate-400 hover:text-white transition active:scale-90">
+        <div class="w-5 h-5 rounded-full border border-slate-500 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+        </div>
+        <span class="text-[9px] font-bold mt-0.5">Tresor</span>
       </button>
     </div>
 
   </div>
 
   <!-- ============================================================== -->
-  <!-- MODAL: FULL-SCREEN INSTAGRAM STORY VIEWER                      -->
+  <!-- MODAL: FULL-SCREEN SPOTDROP LIVE DROP VIEWER (Stories)         -->
   <!-- ============================================================== -->
-  <div id="story-viewer-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center select-none backdrop-blur-md">
-    <div class="relative w-full max-w-[420px] h-full sm:h-[90vh] bg-black sm:rounded-[36px] overflow-hidden flex flex-col justify-between p-4 shadow-2xl">
+  <div id="drop-viewer-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center select-none backdrop-blur-xl">
+    <div class="relative w-full max-w-[430px] h-full sm:h-[90vh] bg-black sm:rounded-[36px] overflow-hidden flex flex-col justify-between p-4 shadow-2xl border border-white/10">
       
       <!-- Top Progress Bars -->
-      <div id="story-bars-container" class="flex items-center space-x-1.5 pt-2 z-20"></div>
+      <div id="drop-progress-lines" class="flex items-center space-x-1.5 pt-2 z-20"></div>
 
-      <!-- Story Header -->
-      <div class="flex items-center justify-between text-white z-20 pt-2">
+      <!-- Drop Header -->
+      <div class="flex items-center justify-between text-white z-20 pt-2.5">
         <div class="flex items-center space-x-2">
-          <img id="viewer-avatar" src="" class="w-8 h-8 rounded-full border border-white/40 object-cover">
+          <div class="w-8 h-8 rounded-full border-2 border-[#00FFA3] overflow-hidden">
+            <img id="viewer-drop-avatar" src="" class="w-full h-full object-cover">
+          </div>
           <div>
-            <span id="viewer-username" class="font-bold text-xs">Jonas</span>
-            <span id="viewer-time" class="text-[10px] text-white/70 ml-1.5">vor 2 Std.</span>
+            <div class="flex items-center space-x-1.5">
+              <span id="viewer-drop-author" class="font-extrabold text-xs">Jonas</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#00FFA3]"></span>
+            </div>
+            <span id="viewer-drop-time" class="text-[10px] text-slate-400">vor 2 Std.</span>
           </div>
         </div>
-        <button onclick="closeStoryViewer()" class="p-1 text-white hover:opacity-70 text-lg font-bold">
+        <button onclick="closeDropViewer()" class="p-1.5 rounded-full bg-white/10 text-white hover:bg-white/20 font-bold text-xs">
           ✕
         </button>
       </div>
 
-      <!-- Main Story Image -->
+      <!-- Main Media Box -->
       <div class="absolute inset-0 flex items-center justify-center">
-        <img id="viewer-image" src="" class="w-full h-full object-cover">
-        <!-- Caption Sticker -->
-        <div id="viewer-caption-box" class="absolute bottom-24 px-4 py-2 bg-black/60 backdrop-blur-md rounded-xl text-white text-xs font-semibold max-w-[85%] text-center hidden">
-          <span id="viewer-caption-text"></span>
+        <img id="viewer-drop-image" src="" class="w-full h-full object-cover">
+        <!-- Caption Badge -->
+        <div id="viewer-drop-caption" class="absolute bottom-24 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-white text-xs font-semibold max-w-[85%] text-center hidden">
         </div>
       </div>
 
-      <!-- Tap to skip left/right handlers -->
+      <!-- Tap left/right listeners -->
       <div class="absolute inset-0 flex z-10">
-        <div class="w-1/2 h-full cursor-pointer" onclick="prevStory()"></div>
-        <div class="w-1/2 h-full cursor-pointer" onclick="nextStory()"></div>
+        <div class="w-1/2 h-full cursor-pointer" onclick="prevDrop()"></div>
+        <div class="w-1/2 h-full cursor-pointer" onclick="nextDrop()"></div>
       </div>
 
-      <!-- Bottom Reply Bar -->
+      <!-- Reply / Reaction Controls -->
       <div class="relative z-20 pb-2 flex items-center space-x-2">
-        <input type="text" placeholder="Nachricht senden..." class="flex-1 text-xs py-2.5 px-4 rounded-full bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none backdrop-blur-sm">
-        <button onclick="sendStoryReaction('🔥')" class="text-xl active:scale-125 transition">🔥</button>
-        <button onclick="sendStoryReaction('❤️')" class="text-xl active:scale-125 transition">❤️</button>
+        <input type="text" placeholder="Antworten..." class="flex-1 text-xs py-2.5 px-4 rounded-xl bg-white/15 border border-white/20 text-white placeholder-slate-400 focus:outline-none backdrop-blur-md">
+        <button onclick="sendDropReaction('💧')" class="text-xl p-1 bg-white/10 rounded-xl active:scale-125 transition">💧</button>
+        <button onclick="sendDropReaction('🔥')" class="text-xl p-1 bg-white/10 rounded-xl active:scale-125 transition">🔥</button>
       </div>
     </div>
   </div>
 
   <!-- ============================================================== -->
-  <!-- MODAL: INSTAGRAM STORY CREATOR (Story posten)                  -->
+  <!-- MODAL: FAST ZERO-DELAY VOIP AUDIO CALL                         -->
   <!-- ============================================================== -->
-  <div id="story-creator-modal" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
-    <div class="w-full max-w-[400px] bg-[var(--ig-card)] rounded-3xl border border-[var(--ig-border)] overflow-hidden shadow-2xl flex flex-col p-5">
-      <div class="flex items-center justify-between pb-3 border-b border-[var(--ig-border)]">
-        <h3 class="font-bold text-sm text-[var(--ig-text)]">Story posten 📸</h3>
-        <button onclick="closeStoryCreator()" class="text-[var(--ig-secondary)] hover:text-[var(--ig-text)] font-bold text-sm">✕</button>
-      </div>
-
-      <!-- Story Image Picker / Preview -->
-      <div onclick="document.getElementById('story-file-input').click()" class="aspect-[9/16] max-h-[380px] w-full mt-4 rounded-2xl bg-slate-100 dark:bg-zinc-900 border-2 border-dashed border-[var(--ig-border)] flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group">
-        <img id="story-create-preview" src="" class="w-full h-full object-cover hidden">
-        <div id="story-create-placeholder" class="text-center p-6">
-          <div class="w-12 h-12 rounded-full bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white mx-auto mb-2 shadow-md">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-          </div>
-          <p class="text-xs font-bold text-[var(--ig-text)]">Foto für Story auswählen</p>
-          <p class="text-[10px] text-[var(--ig-secondary)] mt-1">Sichtbar für 24 Stunden</p>
-        </div>
-        <input type="file" id="story-file-input" accept="image/*" class="hidden" onchange="previewStoryImage(event)">
-      </div>
-
-      <!-- Caption Sticker Input -->
-      <input type="text" id="story-caption-input" placeholder="Text-Sticker hinzufügen (optional)..." class="mt-3 text-xs p-2.5 rounded-lg border border-[var(--ig-border)] bg-[var(--ig-bg)] text-[var(--ig-text)] focus:outline-none">
-
-      <!-- Action Buttons -->
-      <div class="flex space-x-2 mt-4">
-        <button onclick="closeStoryCreator()" class="flex-1 py-2 text-xs font-semibold rounded-lg border border-[var(--ig-border)] text-[var(--ig-text)]">
-          Abbrechen
-        </button>
-        <button onclick="publishStoryNow()" class="flex-1 py-2 bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white text-xs font-bold rounded-lg shadow-md active:scale-95 transition">
-          In Story teilen
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: FAST ZERO-DELAY INSTANT AUDIO CALL                      -->
-  <!-- ============================================================== -->
-  <div id="call-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col justify-between p-8 backdrop-blur-2xl select-none">
+  <div id="call-modal" class="fixed inset-0 bg-[#070A11]/95 z-50 hidden flex flex-col justify-between p-8 backdrop-blur-2xl select-none">
     <div class="text-center pt-10">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[11px] font-bold tracking-wider uppercase mb-2">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-        Spotdrop VoIP Call
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-[#00FFA3] text-[11px] font-bold tracking-wider uppercase mb-2 border border-emerald-500/30">
+        <span class="w-2 h-2 rounded-full bg-[#00FFA3] animate-ping"></span>
+        Spotdrop VoIP Mesh
       </div>
-      <h2 id="call-partner-name" class="text-3xl font-extrabold text-white tracking-tight mt-2">Jonas</h2>
-      <p id="call-status-label" class="text-xs text-emerald-400 font-mono mt-1 font-semibold">Verbunden • 00:04</p>
+      <h2 id="call-user-name" class="text-3xl font-extrabold text-white tracking-tight mt-2">Jonas</h2>
+      <p id="call-timer-label" class="text-xs text-[#00FFA3] font-mono mt-1 font-semibold">Verbunden • 00:04</p>
     </div>
 
-    <!-- Center Call Avatar with Soundwaves -->
+    <!-- Radar Soundwaves Pulse -->
     <div class="flex items-center justify-center my-auto relative">
-      <div class="absolute w-44 h-44 rounded-full bg-emerald-500/10 ring-pulse-anim"></div>
-      <div class="absolute w-36 h-36 rounded-full bg-emerald-500/20 ring-pulse-anim" style="animation-delay: 0.6s"></div>
-      <div class="w-28 h-28 rounded-full border-4 border-emerald-500 overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.5)] z-10">
-        <img id="call-partner-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+      <div class="absolute w-48 h-48 rounded-full bg-[#00FFA3]/10 radar-pulse-anim"></div>
+      <div class="absolute w-36 h-36 rounded-full bg-[#00FFA3]/20 radar-pulse-anim" style="animation-delay: 0.6s"></div>
+      <div class="w-28 h-28 rounded-full border-4 border-[#00FFA3] overflow-hidden shadow-[0_0_40px_rgba(0,255,163,0.5)] z-10 bg-slate-900">
+        <img id="call-user-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
       </div>
     </div>
 
-    <!-- Call Control Buttons -->
+    <!-- Controls -->
     <div class="flex items-center justify-center space-x-6 pb-12">
-      <!-- Mute -->
-      <button onclick="toggleCallMute(this)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition active:scale-95">
+      <button onclick="this.classList.toggle('bg-red-500/40')" class="w-14 h-14 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition active:scale-95 border border-white/10">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.757 3.63 8.25 4.51 8.25H6.75z"/></svg>
       </button>
 
-      <!-- End Call Button -->
-      <button onclick="endInstantCall()" class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-[0_0_35px_rgba(239,68,68,0.7)] transition active:scale-95">
+      <button onclick="endCallInstant()" class="w-16 h-16 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-[0_0_35px_rgba(225,29,72,0.7)] transition active:scale-95">
         <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 010-1.41C3.51 8.5 7.51 6.5 12 6.5s8.49 2 11.71 5.17c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85-.33-.16-.56-.51-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
       </button>
 
-      <!-- Speaker -->
-      <button onclick="toggleCallSpeaker(this)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition active:scale-95">
+      <button onclick="this.classList.toggle('bg-emerald-500/40')" class="w-14 h-14 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition active:scale-95 border border-white/10">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
       </button>
     </div>
   </div>
 
-  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <!-- APPLICATION LOGIC -->
   <script>
-    // State Data
-    let myUser = {
+    // State Models
+    let currentCrewCode = 'SD-77K1';
+    let myProfile = {
       username: 'louis.karns',
-      fullName: 'Louis Karns',
+      name: 'Louis Karns',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-      groupCode: 'SD-77K1'
+      battery: 94
     };
 
-    let storiesData = [
+    let liveDropsData = [
       {
-        id: 's1',
+        id: 'd1',
         author: 'Jonas',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
         imageUrl: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&auto=format&fit=crop&q=80',
-        caption: 'Cocktails am Alexanderplatz 🍸',
+        caption: 'Cocktails am Alexanderplatz Rooftop 🍸',
         time: 'vor 2 Std.',
         viewed: false
       },
       {
-        id: 's2',
+        id: 'd2',
         author: 'Sarah',
         avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
         imageUrl: 'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=800&auto=format&fit=crop&q=80',
@@ -670,7 +635,7 @@
         viewed: false
       },
       {
-        id: 's3',
+        id: 'd3',
         author: 'Fabian',
         avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80',
         imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
@@ -680,32 +645,32 @@
       }
     ];
 
-    let feedPostsData = [
+    let crewPosts = [
       {
         id: 'p1',
         author: 'Jonas',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-        location: 'Berlin Rooftop Bar',
+        spotTag: 'Rooftop Lounge Berlin',
         imageUrl: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&auto=format&fit=crop&q=80',
-        likes: 18,
-        liked: false,
-        caption: 'Der Sunset über Berlin ist heute unschlagbar! Wer kommt noch vorbei? 🌅🍸',
+        dropsCount: 23,
+        hasDropped: false,
+        caption: 'Sunset über Berlin! Der Tisch ist reserviert, kommt rum 🌅',
         time: 'Vor 1 Stunde'
       },
       {
         id: 'p2',
         author: 'Sarah',
         avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
-        location: 'Kreuzberg',
+        spotTag: 'Kreuzberg Corner',
         imageUrl: 'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=800&auto=format&fit=crop&q=80',
-        likes: 24,
-        liked: true,
-        caption: 'Pizza Split Rechnung ist im Chat geteilt! Bitte kurz abhaken 🍕💸',
+        dropsCount: 38,
+        hasDropped: true,
+        caption: 'Pizza Split Rechnung ist im Hub geteilt 🍕💸',
         time: 'Vor 3 Stunden'
       }
     ];
 
-    let profileGridImages = [
+    let vaultImages = [
       'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400&auto=format&fit=crop&q=80',
       'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=400&auto=format&fit=crop&q=80',
       'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&auto=format&fit=crop&q=80',
@@ -714,540 +679,439 @@
       'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=400&auto=format&fit=crop&q=80'
     ];
 
-    let currentStoryIndex = 0;
-    let storyTimer = null;
-    let callTimerInterval = null;
-    let callSeconds = 0;
-    let audioContext = null;
+    let currentDropIdx = 0;
+    let dropTimer = null;
+    let callInterval = null;
+    let callSec = 0;
 
     // Clock
-    function updateClock() {
+    setInterval(() => {
       const now = new Date();
-      const h = String(now.getHours()).padStart(2, '0');
-      const m = String(now.getMinutes()).padStart(2, '0');
-      document.getElementById('live-time').innerText = `${h}:${m}`;
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
+      document.getElementById('live-time').innerText = 
+        String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    }, 1000);
 
-    // Dark / Light Theme Toggle
-    function toggleTheme() {
-      document.body.classList.toggle('dark');
-      const isDark = document.body.classList.contains('dark');
-      document.getElementById('theme-icon').innerHTML = isDark 
-        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>'
-        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
-    }
-
-    // Switch Bottom Tabs
-    function switchTab(tabId) {
-      const tabs = ['feed', 'map', 'create', 'chat', 'profile'];
+    // Dock Navigation Switch
+    function switchNavTab(tab) {
+      const tabs = ['feed', 'radar', 'create', 'hub', 'profile'];
       tabs.forEach(t => {
         const el = document.getElementById('tab-' + t);
         if (el) el.classList.add('hidden');
-        const btn = document.getElementById('nav-btn-' + t);
-        if (btn) btn.classList.remove('text-[var(--ig-text)]');
+        const btn = document.getElementById('dock-btn-' + t);
+        if (btn && t !== 'create') {
+          btn.classList.remove('text-[#00FFA3]');
+          btn.classList.add('text-slate-400');
+        }
       });
 
-      const target = document.getElementById('tab-' + tabId);
+      const target = document.getElementById('tab-' + tab);
       if (target) target.classList.remove('hidden');
 
-      const targetBtn = document.getElementById('nav-btn-' + tabId);
-      if (targetBtn) targetBtn.classList.add('text-[var(--ig-text)]');
-
-      // Special Tab Actions
-      if (tabId === 'map') {
-        initLeafletMap();
-      } else if (tabId === 'profile') {
-        renderProfileGrid();
+      const targetBtn = document.getElementById('dock-btn-' + tab);
+      if (targetBtn && tab !== 'create') {
+        targetBtn.classList.add('text-[#00FFA3]');
+        targetBtn.classList.remove('text-slate-400');
       }
+
+      if (tab === 'radar') initMapRadar();
+      if (tab === 'profile') renderVaultGrid();
     }
 
-    // Render Stories Tray
-    function renderStories() {
-      const container = document.getElementById('stories-list');
-      container.innerHTML = storiesData.map((s, idx) => `
-        <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openStoryViewer(${idx})">
-          <div class="story-ring ${s.viewed ? 'viewed' : ''}">
-            <div class="story-ring-inner">
-              <img src="${s.avatar}" class="w-14 h-14 rounded-full object-cover">
+    // Render Live Drops Tray
+    function renderDropsTray() {
+      const tray = document.getElementById('drops-tray-container');
+      tray.innerHTML = liveDropsData.map((d, i) => `
+        <div class="flex flex-col items-center cursor-pointer shrink-0" onclick="openDropViewer(${i})">
+          <div class="drop-ring ${d.viewed ? 'viewed' : ''}">
+            <div class="drop-ring-inner">
+              <img src="${d.avatar}" class="w-14 h-14 rounded-full object-cover">
             </div>
           </div>
-          <span class="text-[11px] text-[var(--ig-text)] font-medium mt-1 truncate max-w-[64px]">${s.author}</span>
+          <span class="text-[11px] text-slate-300 font-semibold mt-1.5 truncate max-w-[64px]">${d.author}</span>
         </div>
       `).join('');
     }
 
-    // Render Feed Posts
-    function renderFeed() {
-      const container = document.getElementById('feed-posts');
-      container.innerHTML = feedPostsData.map((p, idx) => `
-        <div class="bg-[var(--ig-card)] border-b border-[var(--ig-border)] pb-3">
-          <!-- Post Header -->
-          <div class="flex items-center justify-between px-3 py-2.5">
-            <div class="flex items-center space-x-2.5 cursor-pointer" onclick="openStoryViewer(${idx % storiesData.length})">
-              <div class="story-ring p-[1.5px]">
-                <div class="story-ring-inner p-[1px]">
+    // Render Crew Posts Feed
+    function renderCrewFeed() {
+      const feed = document.getElementById('crew-feed-container');
+      feed.innerHTML = crewPosts.map((p, idx) => `
+        <div class="spot-card overflow-hidden">
+          <!-- Card Header -->
+          <div class="p-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-2.5 cursor-pointer" onclick="openDropViewer(${idx % liveDropsData.length})">
+              <div class="drop-ring p-[1.5px]">
+                <div class="drop-ring-inner p-[1px]">
                   <img src="${p.avatar}" class="w-8 h-8 rounded-full object-cover">
                 </div>
               </div>
               <div>
-                <span class="text-xs font-bold text-[var(--ig-text)] block leading-none">${p.author}</span>
-                <span class="text-[10px] text-[var(--ig-secondary)]">${p.location}</span>
+                <div class="flex items-center space-x-1.5">
+                  <span class="text-xs font-extrabold text-white">${p.author}</span>
+                  <span class="text-[9px] bg-[#00FFA3]/15 text-[#00FFA3] font-bold px-1.5 py-0.2 rounded-md">CREW</span>
+                </div>
+                <span class="text-[10px] text-slate-400 flex items-center gap-1">📍 ${p.spotTag}</span>
               </div>
             </div>
-            <button class="text-[var(--ig-text)] p-1 text-base font-bold">•••</button>
+            <button class="text-slate-400 p-1 font-bold">•••</button>
           </div>
 
-          <!-- Post Media with Double Tap Heart -->
-          <div class="relative w-full aspect-square bg-black overflow-hidden cursor-pointer" ondblclick="handleDoubleTapHeart(event, ${idx})">
+          <!-- Media Box with Water Drop Double Tap -->
+          <div class="relative w-full aspect-square bg-black overflow-hidden cursor-pointer" ondblclick="handleDropBurst(event, ${idx})">
             <img src="${p.imageUrl}" class="w-full h-full object-cover">
-            <div id="heart-burst-${idx}" class="absolute inset-0 flex items-center justify-center pointer-events-none hidden">
-              <svg class="w-24 h-24 text-white fill-current drop-shadow-2xl animate-heart-burst" viewBox="0 0 24 24">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            <div id="drop-burst-${idx}" class="absolute inset-0 flex items-center justify-center pointer-events-none hidden">
+              <svg class="w-24 h-24 text-[#00FFA3] fill-current animate-drop-burst" viewBox="0 0 24 24">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
               </svg>
             </div>
           </div>
 
-          <!-- Action Bar (Heart, Comment, Share, Bookmark) -->
-          <div class="px-3 pt-2.5 flex items-center justify-between">
-            <div class="flex items-center space-x-3.5">
-              <button onclick="toggleLikePost(${idx})" class="p-0.5 active:scale-125 transition">
-                <svg class="w-6 h-6 ${p.liked ? 'text-red-500 fill-current' : 'text-[var(--ig-text)]'}" fill="${p.liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
-                </svg>
+          <!-- Action Dock -->
+          <div class="p-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <!-- Drop Pulse / Like -->
+              <button onclick="toggleDropPulse(${idx})" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl ${p.hasDropped ? 'bg-[#00FFA3]/20 text-[#00FFA3] border border-[#00FFA3]/40' : 'bg-white/5 text-slate-300'} text-xs font-bold transition active:scale-95">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                <span>${p.dropsCount}</span>
               </button>
-              <button onclick="switchTab('chat')" class="p-0.5 text-[var(--ig-text)] active:scale-125 transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 0012 20.25z"/>
-                </svg>
+
+              <!-- Comment Button -->
+              <button onclick="switchNavTab('hub')" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 active:scale-95 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 0012 20.25z"/></svg>
               </button>
-              <button onclick="shareGroupCode()" class="p-0.5 text-[var(--ig-text)] active:scale-125 transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
-                </svg>
+
+              <!-- Share -->
+              <button onclick="shareCrewCode()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 active:scale-95 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
               </button>
             </div>
-            <button onclick="savePostToVault(${idx})" class="p-0.5 text-[var(--ig-text)] active:scale-125 transition">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/>
-              </svg>
+
+            <!-- Save into Vault -->
+            <button onclick="saveToVault(${idx})" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 active:scale-95 transition" title="In Vault sichern">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
             </button>
           </div>
 
-          <!-- Likes Count -->
-          <div class="px-3 pt-2">
-            <span class="text-xs font-bold text-[var(--ig-text)]">Gefällt ${p.likes} Mal</span>
-          </div>
-
-          <!-- Caption -->
-          <div class="px-3 pt-1 text-xs">
-            <span class="font-bold text-[var(--ig-text)]">${p.author}</span>
-            <span class="text-[var(--ig-text)] ml-1">${p.caption}</span>
-          </div>
-
-          <!-- Time -->
-          <div class="px-3 pt-1">
-            <span class="text-[10px] uppercase text-[var(--ig-secondary)] font-semibold">${p.time}</span>
+          <!-- Caption & Timestamp -->
+          <div class="px-3.5 pb-3 text-xs leading-relaxed">
+            <span class="font-bold text-white mr-1">${p.author}</span>
+            <span class="text-slate-300">${p.caption}</span>
+            <span class="block text-[10px] text-slate-500 font-semibold mt-1 uppercase">${p.time}</span>
           </div>
         </div>
       `).join('');
     }
 
-    // Double Tap Like Animation
-    function handleDoubleTapHeart(e, idx) {
-      if (!feedPostsData[idx].liked) {
-        toggleLikePost(idx);
-      }
-      const el = document.getElementById('heart-burst-' + idx);
-      if (el) {
-        el.classList.remove('hidden');
-        setTimeout(() => el.classList.add('hidden'), 800);
+    function handleDropBurst(e, idx) {
+      if (!crewPosts[idx].hasDropped) toggleDropPulse(idx);
+      const burst = document.getElementById('drop-burst-' + idx);
+      if (burst) {
+        burst.classList.remove('hidden');
+        setTimeout(() => burst.classList.add('hidden'), 750);
       }
     }
 
-    function toggleLikePost(idx) {
-      feedPostsData[idx].liked = !feedPostsData[idx].liked;
-      feedPostsData[idx].likes += feedPostsData[idx].liked ? 1 : -1;
-      renderFeed();
+    function toggleDropPulse(idx) {
+      crewPosts[idx].hasDropped = !crewPosts[idx].hasDropped;
+      crewPosts[idx].dropsCount += crewPosts[idx].hasDropped ? 1 : -1;
+      renderCrewFeed();
     }
 
-    function savePostToVault(idx) {
-      const url = feedPostsData[idx].imageUrl;
-      profileGridImages.unshift(url);
-      renderProfileGrid();
-      alert('Im Snap-Vault gespeichert! 🔒');
+    function saveToVault(idx) {
+      vaultImages.unshift(crewPosts[idx].imageUrl);
+      renderVaultGrid();
+      alert('Im Tresor gesichert! 🔒');
     }
 
-    // Render Profile Grid
-    function renderProfileGrid() {
-      const grid = document.getElementById('profile-grid');
-      grid.innerHTML = profileGridImages.map((img, i) => `
-        <div onclick="viewVaultFullscreen(${i})" class="aspect-square bg-slate-200 overflow-hidden cursor-pointer relative group">
+    function renderVaultGrid() {
+      const grid = document.getElementById('vault-grid-container');
+      grid.innerHTML = vaultImages.map((img, idx) => `
+        <div onclick="openDropViewerWithImg('${img}')" class="aspect-square bg-slate-900 rounded-xl overflow-hidden cursor-pointer relative group">
           <img src="${img}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
         </div>
       `).join('');
-      document.getElementById('profile-stat-posts').innerText = profileGridImages.length;
-    }
-
-    function viewVaultFullscreen(idx) {
-      openStoryViewerWithImage(profileGridImages[idx], 'Snap aus Tresor');
+      document.getElementById('vault-count-stat').innerText = vaultImages.length;
     }
 
     // ==============================================================
-    // STORY VIEWER (FULL-SCREEN INSTAGRAM STYLE)
+    // LIVE DROP VIEWER (Stories)
     // ==============================================================
-    function openStoryViewer(index) {
-      currentStoryIndex = index;
-      storiesData[index].viewed = true;
-      renderStories();
+    function openDropViewer(idx) {
+      currentDropIdx = idx;
+      liveDropsData[idx].viewed = true;
+      renderDropsTray();
 
-      const modal = document.getElementById('story-viewer-modal');
-      modal.classList.remove('hidden');
-
-      loadStory(currentStoryIndex);
+      document.getElementById('drop-viewer-modal').classList.remove('hidden');
+      loadDropContent(currentDropIdx);
     }
 
-    function openStoryViewerWithImage(imgUrl, caption) {
-      const modal = document.getElementById('story-viewer-modal');
-      modal.classList.remove('hidden');
-
-      document.getElementById('story-bars-container').innerHTML = `
-        <div class="flex-1 h-0.5 bg-white/40 rounded-full overflow-hidden">
-          <div class="h-full bg-white story-progress-active"></div>
+    function openDropViewerWithImg(img) {
+      document.getElementById('drop-viewer-modal').classList.remove('hidden');
+      document.getElementById('drop-progress-lines').innerHTML = `
+        <div class="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden">
+          <div class="h-full bg-[#00FFA3] story-line-active"></div>
         </div>
       `;
-      document.getElementById('viewer-avatar').src = myUser.avatar;
-      document.getElementById('viewer-username').innerText = myUser.username;
-      document.getElementById('viewer-time').innerText = 'Jetzt';
-      document.getElementById('viewer-image').src = imgUrl;
-
-      const captionBox = document.getElementById('viewer-caption-box');
-      if (caption) {
-        captionBox.classList.remove('hidden');
-        document.getElementById('viewer-caption-text').innerText = caption;
-      } else {
-        captionBox.classList.add('hidden');
-      }
+      document.getElementById('viewer-drop-avatar').src = myProfile.avatar;
+      document.getElementById('viewer-drop-author').innerText = myProfile.username;
+      document.getElementById('viewer-drop-time').innerText = 'Jetzt';
+      document.getElementById('viewer-drop-image').src = img;
     }
 
-    function loadStory(idx) {
-      if (idx < 0 || idx >= storiesData.length) {
-        closeStoryViewer();
+    function loadDropContent(idx) {
+      if (idx < 0 || idx >= liveDropsData.length) {
+        closeDropViewer();
         return;
       }
+      const drop = liveDropsData[idx];
 
-      const story = storiesData[idx];
-      const barsContainer = document.getElementById('story-bars-container');
-      barsContainer.innerHTML = storiesData.map((_, i) => `
-        <div class="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden">
-          <div class="h-full bg-white ${i === idx ? 'story-progress-active' : (i < idx ? 'w-full' : 'w-0')}"></div>
+      const linesContainer = document.getElementById('drop-progress-lines');
+      linesContainer.innerHTML = liveDropsData.map((_, i) => `
+        <div class="flex-1 h-0.5 bg-white/20 rounded-full overflow-hidden">
+          <div class="h-full bg-[#00FFA3] ${i === idx ? 'story-line-active' : (i < idx ? 'w-full' : 'w-0')}"></div>
         </div>
       `).join('');
 
-      document.getElementById('viewer-avatar').src = story.avatar;
-      document.getElementById('viewer-username').innerText = story.author;
-      document.getElementById('viewer-time').innerText = story.time;
-      document.getElementById('viewer-image').src = story.imageUrl;
+      document.getElementById('viewer-drop-avatar').src = drop.avatar;
+      document.getElementById('viewer-drop-author').innerText = drop.author;
+      document.getElementById('viewer-drop-time').innerText = drop.time;
+      document.getElementById('viewer-drop-image').src = drop.imageUrl;
 
-      const captionBox = document.getElementById('viewer-caption-box');
-      if (story.caption) {
-        captionBox.classList.remove('hidden');
-        document.getElementById('viewer-caption-text').innerText = story.caption;
+      const cap = document.getElementById('viewer-drop-caption');
+      if (drop.caption) {
+        cap.classList.remove('hidden');
+        cap.innerText = drop.caption;
       } else {
-        captionBox.classList.add('hidden');
+        cap.classList.add('hidden');
       }
 
-      clearTimeout(storyTimer);
-      storyTimer = setTimeout(() => nextStory(), 5000);
+      clearTimeout(dropTimer);
+      dropTimer = setTimeout(() => nextDrop(), 5000);
     }
 
-    function nextStory() {
-      if (currentStoryIndex + 1 < storiesData.length) {
-        currentStoryIndex++;
-        loadStory(currentStoryIndex);
+    function nextDrop() {
+      if (currentDropIdx + 1 < liveDropsData.length) {
+        currentDropIdx++;
+        loadDropContent(currentDropIdx);
       } else {
-        closeStoryViewer();
+        closeDropViewer();
       }
     }
 
-    function prevStory() {
-      if (currentStoryIndex > 0) {
-        currentStoryIndex--;
-        loadStory(currentStoryIndex);
+    function prevDrop() {
+      if (currentDropIdx > 0) {
+        currentDropIdx--;
+        loadDropContent(currentDropIdx);
       }
     }
 
-    function closeStoryViewer() {
-      clearTimeout(storyTimer);
-      document.getElementById('story-viewer-modal').classList.add('hidden');
+    function closeDropViewer() {
+      clearTimeout(dropTimer);
+      document.getElementById('drop-viewer-modal').classList.add('hidden');
     }
 
-    function sendStoryReaction(emoji) {
-      alert(`Reaktion ${emoji} an ${storiesData[currentStoryIndex]?.author || 'User'} gesendet!`);
+    function sendDropReaction(emoji) {
+      alert(`Reaktion ${emoji} an ${liveDropsData[currentDropIdx]?.author} gesendet!`);
     }
 
     // ==============================================================
-    // STORY CREATOR (Story posten)
+    // DROP CREATOR
     // ==============================================================
-    let newStoryImageData = null;
+    let newCreatedImg = null;
 
-    function openStoryCreator() {
-      newStoryImageData = null;
-      document.getElementById('story-create-preview').classList.add('hidden');
-      document.getElementById('story-create-placeholder').classList.remove('hidden');
-      document.getElementById('story-caption-input').value = '';
-      document.getElementById('story-creator-modal').classList.remove('hidden');
+    function openDropCreator() {
+      switchNavTab('create');
     }
 
-    function closeStoryCreator() {
-      document.getElementById('story-creator-modal').classList.add('hidden');
-    }
-
-    function previewStoryImage(event) {
+    function handleCreatorImage(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-          newStoryImageData = e.target.result;
-          const img = document.getElementById('story-create-preview');
-          img.src = newStoryImageData;
+        reader.onload = e => {
+          newCreatedImg = e.target.result;
+          const img = document.getElementById('creator-img-preview');
+          img.src = newCreatedImg;
           img.classList.remove('hidden');
-          document.getElementById('story-create-placeholder').classList.add('hidden');
+          document.getElementById('creator-placeholder').classList.add('hidden');
         };
         reader.readAsDataURL(file);
       }
     }
 
-    function publishStoryNow() {
-      if (!newStoryImageData) {
-        // Fallback default snapshot
-        newStoryImageData = 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&auto=format&fit=crop&q=80';
-      }
+    function publishFeedDrop() {
+      const cap = document.getElementById('creator-caption-input').value.trim();
+      const img = newCreatedImg || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80';
 
-      const caption = document.getElementById('story-caption-input').value.trim();
-      const newStory = {
-        id: 's_' + Date.now(),
+      crewPosts.unshift({
+        id: 'p_' + Date.now(),
+        author: myProfile.username,
+        avatar: myProfile.avatar,
+        spotTag: 'Spotdrop Berlin',
+        imageUrl: img,
+        dropsCount: 1,
+        hasDropped: true,
+        caption: cap || 'Neuer Crew Snap ⚡',
+        time: 'Gerade eben'
+      });
+
+      vaultImages.unshift(img);
+      renderCrewFeed();
+      renderVaultGrid();
+      switchNavTab('feed');
+    }
+
+    function publishStoryDrop() {
+      const cap = document.getElementById('creator-caption-input').value.trim();
+      const img = newCreatedImg || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80';
+
+      liveDropsData.unshift({
+        id: 'd_' + Date.now(),
         author: 'Du',
-        avatar: myUser.avatar,
-        imageUrl: newStoryImageData,
-        caption: caption || 'Neue Story!',
+        avatar: myProfile.avatar,
+        imageUrl: img,
+        caption: cap || 'Live Drop!',
         time: 'Gerade eben',
         viewed: false
-      };
+      });
 
-      storiesData.unshift(newStory);
-      renderStories();
-      closeStoryCreator();
-      openStoryViewer(0);
+      renderDropsTray();
+      switchNavTab('feed');
+      openDropViewer(0);
     }
 
     // ==============================================================
-    // CREATE POST TAB
+    // ZERO-DELAY VOIP AUDIO CALL
     // ==============================================================
-    let newPostImageData = null;
-
-    function previewPostImage(event) {
-      const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          newPostImageData = e.target.result;
-          const img = document.getElementById('post-preview-img');
-          img.src = newPostImageData;
-          img.classList.remove('hidden');
-          document.getElementById('post-placeholder').classList.add('hidden');
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-
-    function publishNewPost() {
-      const caption = document.getElementById('post-caption-input').value.trim();
-      const img = newPostImageData || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80';
-
-      const newPost = {
-        id: 'p_' + Date.now(),
-        author: myUser.username,
-        avatar: myUser.avatar,
-        location: 'Berlin Spot',
-        imageUrl: img,
-        likes: 1,
-        liked: true,
-        caption: caption || 'Spotdrop Crew Life ⚡',
-        time: 'Gerade eben'
-      };
-
-      feedPostsData.unshift(newPost);
-      profileGridImages.unshift(img);
-      renderFeed();
-      renderProfileGrid();
-      switchTab('feed');
-    }
-
-    function publishNewStoryFromCreate() {
-      newStoryImageData = newPostImageData || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80';
-      publishStoryNow();
-    }
-
-    // ==============================================================
-    // FAST ZERO-DELAY VOIP AUDIO CALL
-    // ==============================================================
-    function startInstantCall(partnerName) {
-      document.getElementById('call-partner-name').innerText = partnerName || 'Jonas';
+    function startInstantCall(partner) {
+      document.getElementById('call-user-name').innerText = partner || 'Jonas';
       document.getElementById('call-modal').classList.remove('hidden');
       
-      callSeconds = 0;
-      document.getElementById('call-status-label').innerText = 'Verbindet blitzschnell...';
+      callSec = 0;
+      document.getElementById('call-timer-label').innerText = 'Verbindet blitzschnell...';
 
-      // Immediate Audio Beep / Dial tone via Web Audio API (Zero Latency)
+      // Dial sound
       playDialTone();
 
       setTimeout(() => {
-        document.getElementById('call-status-label').innerText = 'Verbunden • 00:00';
-        clearInterval(callTimerInterval);
-        callTimerInterval = setInterval(() => {
-          callSeconds++;
-          const min = String(Math.floor(callSeconds / 60)).padStart(2, '0');
-          const sec = String(callSeconds % 60).padStart(2, '0');
-          document.getElementById('call-status-label').innerText = `Verbunden • ${min}:${sec}`;
+        document.getElementById('call-timer-label').innerText = 'Verbunden • 00:00';
+        clearInterval(callInterval);
+        callInterval = setInterval(() => {
+          callSec++;
+          const m = String(Math.floor(callSec / 60)).padStart(2, '0');
+          const s = String(callSec % 60).padStart(2, '0');
+          document.getElementById('call-timer-label').innerText = `Verbunden • ${m}:${s}`;
         }, 1000);
-      }, 400); // 400ms ultra-fast connect!
+      }, 350);
     }
 
-    function endInstantCall() {
-      clearInterval(callTimerInterval);
+    function endCallInstant() {
+      clearInterval(callInterval);
       document.getElementById('call-modal').classList.add('hidden');
-    }
-
-    function toggleCallMute(btn) {
-      btn.classList.toggle('bg-red-500/50');
-    }
-    function toggleCallSpeaker(btn) {
-      btn.classList.toggle('bg-emerald-500/50');
     }
 
     function playDialTone() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
-        audioContext = new AudioCtx();
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, audioContext.currentTime); // 440 Hz standard dial
-        gain.gain.setValueAtTime(0.08, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.35);
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.setValueAtTime(520, ctx.currentTime);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
         osc.connect(gain);
-        gain.connect(audioContext.destination);
+        gain.connect(ctx.destination);
         osc.start();
-        osc.stop(audioContext.currentTime + 0.35);
-      } catch (err) {}
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {}
     }
 
     // ==============================================================
-    // CHAT SYSTEM
+    // RADAR MAP
     // ==============================================================
-    function sendChatMsg() {
-      const input = document.getElementById('chat-input-text');
-      const text = input.value.trim();
-      if (!text) return;
+    let leafletRadar = null;
+    let myLocMarker = null;
 
-      const container = document.getElementById('chat-messages-container');
-      const msgDiv = document.createElement('div');
-      msgDiv.className = 'flex items-end justify-end space-x-2 ml-auto max-w-[80%]';
-      msgDiv.innerHTML = `
-        <div class="bg-[var(--ig-blue)] text-white p-2.5 rounded-2xl rounded-br-none shadow-sm">
-          <span class="text-[10px] text-white/70 block mb-0.5">Du • Jetzt</span>
-          ${text}
-        </div>
-      `;
-      container.appendChild(msgDiv);
-      input.value = '';
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function toggleVoiceAudio(btn) {
-      const playIcon = btn.querySelector('.play-icon');
-      const pauseIcon = btn.querySelector('.pause-icon');
-      playIcon.classList.toggle('hidden');
-      pauseIcon.classList.toggle('hidden');
-    }
-
-    // ==============================================================
-    // MAP SYSTEM (Leaflet)
-    // ==============================================================
-    let leafletMapInstance = null;
-    let myMarker = null;
-
-    function initLeafletMap() {
-      if (leafletMapInstance) {
-        leafletMapInstance.invalidateSize();
+    function initMapRadar() {
+      if (leafletRadar) {
+        leafletRadar.invalidateSize();
         return;
       }
-
       setTimeout(() => {
-        leafletMapInstance = L.map('leaflet-map').setView([52.5200, 13.4050], 14);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap'
-        }).addTo(leafletMapInstance);
+        leafletRadar = L.map('spotdrop-map').setView([52.5200, 13.4050], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '© CartoDB'
+        }).addTo(leafletRadar);
 
-        // Add Me
-        myMarker = L.marker([52.5200, 13.4050]).addTo(leafletMapInstance)
+        myLocMarker = L.marker([52.5200, 13.4050]).addTo(leafletRadar)
           .bindPopup('<b>Du (Louis)</b><br>Akku: 94%').openPopup();
 
-        // Add Crew
-        L.marker([52.5225, 13.4110]).addTo(leafletMapInstance)
-          .bindPopup('<b>Jonas</b><br>Akku: 82%');
-        L.marker([52.5180, 13.3980]).addTo(leafletMapInstance)
-          .bindPopup('<b>Sarah</b><br>Akku: 4% (Kritisch)');
+        L.marker([52.5225, 13.4110]).addTo(leafletRadar).bindPopup('<b>Jonas</b><br>Akku: 82%');
+        L.marker([52.5180, 13.3980]).addTo(leafletRadar).bindPopup('<b>Sarah</b><br>Akku: 4%');
       }, 100);
     }
 
     function centerMapOnMe() {
-      if (leafletMapInstance && myMarker) {
-        leafletMapInstance.setView(myMarker.getLatLng(), 16);
-      }
+      if (leafletRadar && myLocMarker) leafletRadar.setView(myLocMarker.getLatLng(), 16);
     }
 
     function dropSpotHere() {
-      if (leafletMapInstance && myMarker) {
-        L.marker(myMarker.getLatLng()).addTo(leafletMapInstance)
-          .bindPopup('<b>Neuer Crew Spot 📍</b><br>von Louis markiert').openPopup();
-        alert('Spot gesetzt! Alle Crew-Mitglieder können ihn sehen.');
+      if (leafletRadar && myLocMarker) {
+        L.marker(myLocMarker.getLatLng()).addTo(leafletRadar)
+          .bindPopup('<b>Neuer Crew Spot 📍</b>').openPopup();
+        alert('Spot auf dem Radar gesetzt!');
       }
     }
 
-    function triggerEmergency() {
-      alert('🚨 NOTFALL-ALARM AN DIE GANZE CREW GESENDET! Standort wird übertragen.');
+    function triggerEmergencySOS() {
+      alert('🚨 NOTFALL-ALARM AN ALLE CREW MITGLIEDER AUSGELÖST! GPS-Standort gesendet.');
     }
 
-    // Other Utility
-    function shareGroupCode() {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(myUser.groupCode);
+    // ==============================================================
+    // HUB CHAT
+    // ==============================================================
+    function sendHubMsg() {
+      const input = document.getElementById('hub-input-text');
+      const val = input.value.trim();
+      if (!val) return;
+
+      const container = document.getElementById('hub-chat-container');
+      const div = document.createElement('div');
+      div.className = 'flex items-end justify-end space-x-2 ml-auto max-w-[85%]';
+      div.innerHTML = `
+        <div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 rounded-2xl rounded-br-none shadow-md">
+          <span class="text-[10px] text-white/70 block mb-0.5">Du • Jetzt</span>
+          ${val}
+        </div>
+      `;
+      container.appendChild(div);
+      input.value = '';
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function toggleVoicePlay(btn) {
+      alert('Audio wird über Spotdrop VoIP Speaker abgespielt...');
+    }
+
+    // Utilities
+    function shareCrewCode() {
+      if (navigator.clipboard) navigator.clipboard.writeText(currentCrewCode);
+      alert(`Crew-Code "${currentCrewCode}" kopiert!`);
+    }
+
+    function renameUserPrompt() {
+      const n = prompt('Benutzername ändern:', myProfile.username);
+      if (n) {
+        myProfile.username = n;
+        document.getElementById('profile-tag-name').innerText = n;
       }
-      alert(`Crew-Code "${myUser.groupCode}" in Zwischenablage kopiert!`);
     }
 
-    function editProfileName() {
-      const newName = prompt('Dein Benutzername:', myUser.username);
-      if (newName) {
-        myUser.username = newName;
-        document.getElementById('profile-username').innerText = newName;
-      }
-    }
-
-    function openMenuModal() {
-      alert('Spotdrop Einstellungen & Datenschutz (v1.0.6)');
-    }
-
-    // INITIALIZE APP
+    // Init
     window.addEventListener('DOMContentLoaded', () => {
-      renderStories();
-      renderFeed();
-      renderProfileGrid();
+      renderDropsTray();
+      renderCrewFeed();
+      renderVaultGrid();
     });
   </script>
 </body>
