@@ -146,6 +146,12 @@
 
       <!-- Right: Direct Message & Instant VoIP Call -->
       <div class="flex items-center space-x-2">
+        <!-- Photo Streak Flame Badge in Header -->
+        <div onclick="switchTab('profile')" class="cursor-pointer flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-rose-500/20 border border-amber-500/40 text-amber-300 font-extrabold text-xs shadow-[0_0_12px_rgba(245,158,11,0.2)] active:scale-95 transition" title="Fotospeicher Streak">
+          <span class="text-sm">🔥</span>
+          <span id="header-streak-count">7</span>
+        </div>
+
         <!-- Instant Call Trigger -->
         <button onclick="startInstantCall('Jonas')" class="p-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[#00FFA3] transition active:scale-95 relative" title="Instant Anruf">
           <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
@@ -226,7 +232,7 @@
         </div>
 
         <!-- 1-ON-1 / GROUP CHAT ROOM VIEW (Detailansicht) -->
-        <div id="chat-room-view" class="absolute inset-0 bg-[#06090F] flex flex-col z-20 hidden">
+        <div id="chat-room-view" class="absolute inset-0 bg-[#06090F] flex flex-col z-40 hidden">
           <!-- Room Header -->
           <div class="p-3 bg-[#0A0E18]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between shrink-0">
             <div class="flex items-center space-x-2.5">
@@ -256,8 +262,8 @@
           <!-- Messages Stream -->
           <div id="room-messages-stream" class="flex-1 p-3.5 overflow-y-auto space-y-3 text-xs"></div>
 
-          <!-- Room Input Bar -->
-          <div class="p-3 bg-[#090D17]/95 border-t border-white/10 flex items-center space-x-2 shrink-0">
+          <!-- Room Input Bar (Unobstructed at bottom) -->
+          <div class="p-3 pb-6 bg-[#090D17] border-t border-white/10 flex items-center space-x-2 shrink-0">
             <button onclick="triggerVoiceMemoSimulation()" class="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 transition active:scale-95" title="Sprachnachricht">
               🎤
             </button>
@@ -401,6 +407,25 @@
           </div>
         </div>
 
+        <!-- Fotospeicher Drop Streak Card -->
+        <div class="mx-4 mt-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/15 border border-amber-500/30 flex items-center justify-between shadow-[0_0_20px_rgba(245,158,11,0.12)]">
+          <div class="flex items-center space-x-3">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-xl shadow-lg shrink-0">
+              🔥
+            </div>
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-black text-white" id="streak-card-count">7 Tage Streak!</span>
+                <span class="text-[9px] bg-amber-400 text-black px-1.5 py-0.2 rounded-full font-black uppercase">Aktiv</span>
+              </div>
+              <p class="text-[11px] text-amber-200/80 mt-0.5">Täglich Fotos im Tresor sichern, um die Flamme zu halten.</p>
+            </div>
+          </div>
+          <button onclick="switchTab('create')" class="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-[10px] rounded-xl transition active:scale-95 shrink-0 shadow-sm">
+            + Foto
+          </button>
+        </div>
+
         <!-- Snap-Vault 3x3 Grid -->
         <div class="px-4 py-2.5 bg-[#06090F] flex items-center justify-between text-xs font-bold text-slate-400">
           <span>SNAP-VAULT TRESOR</span>
@@ -412,7 +437,7 @@
     </div>
 
     <!-- FLOATING BOTTOM DOCK NAVIGATION -->
-    <div class="absolute bottom-3 left-4 right-4 h-16 bg-[#0B101D]/90 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.85),0_0_20px_rgba(0,255,163,0.08)] flex items-center justify-around px-2 z-30">
+    <div id="floating-bottom-dock" class="absolute bottom-3 left-4 right-4 h-16 bg-[#0B101D]/90 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.85),0_0_20px_rgba(0,255,163,0.08)] flex items-center justify-around px-2 z-30 transition-all duration-200">
       
       <!-- Feed -->
       <button onclick="switchTab('feed')" id="dock-feed" class="flex flex-col items-center justify-center p-2 text-[#00FFA3] transition active:scale-90">
@@ -535,6 +560,14 @@
         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
       </button>
     </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- TOAST: FOTOSPEICHER STREAK NOTIFICATION                         -->
+  <!-- ============================================================== -->
+  <div id="streak-toast-modal" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 hidden bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-[0_0_35px_rgba(245,158,11,0.6)] flex items-center space-x-2.5 border border-amber-300/40 animate-bounce pointer-events-none">
+    <span class="text-xl">🔥</span>
+    <span id="streak-toast-text">STREAK AKTIV: 8 Tage in Folge im Fotospeicher!</span>
   </div>
 
   <!-- JAVASCRIPT APPLICATION CORE -->
@@ -688,6 +721,33 @@
     let callTimerInterval = null;
     let callSecondsCount = 0;
 
+    // Fotospeicher Streak State
+    let vaultStreak = parseInt(localStorage.getItem('spotdrop_vault_streak') || '7');
+
+    function incrementVaultStreak() {
+      vaultStreak++;
+      localStorage.setItem('spotdrop_vault_streak', vaultStreak);
+      updateStreakUI();
+      showStreakToast();
+    }
+
+    function updateStreakUI() {
+      const hCount = document.getElementById('header-streak-count');
+      if (hCount) hCount.innerText = vaultStreak;
+      const cardCount = document.getElementById('streak-card-count');
+      if (cardCount) cardCount.innerText = `${vaultStreak} Tage Streak!`;
+    }
+
+    function showStreakToast() {
+      const toast = document.getElementById('streak-toast-modal');
+      const text = document.getElementById('streak-toast-text');
+      if (toast && text) {
+        text.innerText = `🔥 STREAK: ${vaultStreak} Tage in Folge im Fotospeicher!`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3500);
+      }
+    }
+
     // Clock
     setInterval(() => {
       const d = new Date();
@@ -697,6 +757,10 @@
 
     // Tab Switcher
     function switchTab(tab) {
+      // Ensure bottom dock is visible when switching tabs
+      const dock = document.getElementById('floating-bottom-dock');
+      if (dock) dock.classList.remove('hidden');
+
       const tabs = ['feed', 'chats', 'radar', 'create', 'profile'];
       tabs.forEach(t => {
         const el = document.getElementById('tab-' + t);
@@ -802,10 +866,14 @@
       renderRoomMessages(chat);
 
       document.getElementById('chat-room-view').classList.remove('hidden');
+      const dock = document.getElementById('floating-bottom-dock');
+      if (dock) dock.classList.add('hidden');
     }
 
     function closeChatRoom() {
       document.getElementById('chat-room-view').classList.add('hidden');
+      const dock = document.getElementById('floating-bottom-dock');
+      if (dock) dock.classList.remove('hidden');
       currentOpenChatId = null;
     }
 
@@ -966,7 +1034,8 @@
     function saveSnapToVault(idx) {
       vaultSnaps.unshift(feedPosts[idx].imageUrl);
       renderVaultGrid();
-      alert('Im Tresor gesichert! 🔒');
+      incrementVaultStreak();
+      alert('Im Fotospeicher gesichert & Streak erhöht! 🔒🔥');
     }
 
     function renderVaultGrid() {
@@ -1082,6 +1151,7 @@
       vaultSnaps.unshift(img);
       renderFeedList();
       renderVaultGrid();
+      incrementVaultStreak();
       switchTab('feed');
     }
 
@@ -1099,7 +1169,10 @@
         viewed: false
       });
 
+      vaultSnaps.unshift(img);
       renderDropsTray();
+      renderVaultGrid();
+      incrementVaultStreak();
       switchTab('feed');
       openStoryDropViewer(0);
     }
@@ -1213,6 +1286,7 @@
       renderFeedList();
       renderChatsOverview();
       renderVaultGrid();
+      updateStreakUI();
     });
   </script>
 </body>
