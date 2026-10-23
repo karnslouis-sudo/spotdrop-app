@@ -42,7 +42,7 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Configure Gradle, compileSdk 34 & Fix AGP 8 Namespaces
+      - name: Configure Gradle, compileSdk 36 & Fix AGP 8 Namespaces
         run: |
           cat << 'EOF' > fix_build.py
           import os, re
@@ -56,15 +56,15 @@ jobs:
                   with open(p, 'w') as f:
                       f.write(c)
 
-          # 2. Desugaring, minSdk 23, and compileSdk 34 in app/build.gradle
+          # 2. Desugaring, minSdk 23, and compileSdk 36 in app/build.gradle
           for p in ['android/app/build.gradle', 'android/app/build.gradle.kts']:
               if os.path.exists(p):
                   with open(p, 'r') as f:
                       c = f.read()
-                  c = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 34', c)
-                  c = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 34', c)
-                  c = c.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
-                  c = c.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 34')
+                  c = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', c)
+                  c = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', c)
+                  c = c.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
+                  c = c.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
                   c = c.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 23')
                   c = c.replace('minSdkVersion 21', 'minSdkVersion 23')
                   c = c.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
@@ -82,7 +82,20 @@ jobs:
                   with open(p, 'w') as f:
                       f.write(c)
 
-          # 3. Fix namespace, remove package attribute, and bump compileSdk in pub-cache plugins
+          # 3. Add compileSdk 36 to root build.gradle subprojects
+          for p in ['android/build.gradle', 'android/build.gradle.kts']:
+              if os.path.exists(p):
+                  with open(p, 'r') as f:
+                      c = f.read()
+                  if 'subprojects' not in c:
+                      if p.endswith('.kts'):
+                          c += '\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {\n            compileSdkVersion(36)\n        }\n    }\n}\n'
+                      else:
+                          c += '\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty("android")) {\n            project.android {\n                compileSdkVersion 36\n            }\n        }\n    }\n}\n'
+                      with open(p, 'w') as f:
+                          f.write(c)
+
+          # 4. Fix namespace, remove package attribute, and bump compileSdk in pub-cache plugins
           pub_cache = os.path.expanduser('~/.pub-cache')
           if os.path.exists(pub_cache):
               for root, dirs, files in os.walk(pub_cache):
@@ -98,6 +111,17 @@ jobs:
                               mc = re.sub(r'\s*package="[^"]+"', '', mc)
                               with open(mp, 'w') as f:
                                   f.write(mc)
+                              
+                              # Look for corresponding build.gradle
+                              bp = os.path.abspath(os.path.join(root, '..', '..', 'build.gradle'))
+                              if os.path.exists(bp):
+                                  with open(bp, 'r') as f:
+                                      bc = f.read()
+                                  if 'android {' in bc and 'namespace' not in bc:
+                                      print(f'Adding namespace {pkg} to {bp}')
+                                      bc = bc.replace('android {', f"android {{\n    namespace '{pkg}'")
+                                      with open(bp, 'w') as f:
+                                          f.write(bc)
                       except Exception as ex:
                           print(f'Error patching {mp}: {ex}')
 
@@ -108,24 +132,10 @@ jobs:
                               bc = f.read()
                           modified = False
                           if 'compileSdkVersion' in bc:
-                              bc = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 34', bc)
+                              bc = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', bc)
                               modified = True
                           if 'compileSdk' in bc:
-                              bc = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 34', bc)
-                              modified = True
-                          if 'android {' in bc and 'namespace' not in bc:
-                              parent = os.path.basename(os.path.dirname(os.path.dirname(bp)))
-                              # Try to find package in src/main/AndroidManifest.xml
-                              manifest_p = os.path.join(root, 'src', 'main', 'AndroidManifest.xml')
-                              ns = 'com.spotdrop.' + parent.split('-')[0].replace('.', '_')
-                              if os.path.exists(manifest_p):
-                                  with open(manifest_p, 'r') as mf:
-                                      mfc = mf.read()
-                                  pm = re.search(r'package="([^"]+)"', mfc)
-                                  if pm:
-                                      ns = pm.group(1)
-                              print(f'Adding namespace {ns} to {bp}')
-                              bc = bc.replace('android {', f"android {{\n    namespace '{ns}'")
+                              bc = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', bc)
                               modified = True
                           if modified:
                               with open(bp, 'w') as f:
@@ -133,7 +143,7 @@ jobs:
                       except Exception as ex:
                           print(f'Error patching {bp}: {ex}')
 
-          print('Successfully patched Android build files!')
+          print('Successfully patched Android build files with compileSdk 36!')
           EOF
           python3 fix_build.py
 
