@@ -22,12 +22,9 @@ dependencies:
   battery_plus: ^6.0.0
   sensors_plus: ^5.0.0
   flutter_local_notifications: ^17.1.2
-  record: ^5.1.2
+  record: ^4.4.4
   audioplayers: ^6.0.0
   path_provider: ^2.1.2
-
-dependency_overrides:
-  record_platform_interface: 1.5.0
 
 dev_dependencies:
   flutter_test:
