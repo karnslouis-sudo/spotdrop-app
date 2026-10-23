@@ -38,7 +38,7 @@ jobs:
       - name: Configure Kotlin, Core Desugaring & Permissions
         run: |
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml || true
-          python3 -c "
+          cat << 'EOF' > fix_gradle.py
           import os
           for p in ['android/settings.gradle', 'android/settings.gradle.kts']:
               if os.path.exists(p):
@@ -60,29 +60,29 @@ jobs:
                       if 'isCoreLibraryDesugaringEnabled' not in c:
                           c = c.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
                       if 'desugar_jdk_libs' not in c:
-                          c += '\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.0.4\")\n}\n'
+                          c += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")\n}\n'
                   else:
                       if 'coreLibraryDesugaringEnabled' not in c:
                           c = c.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
                       if 'desugar_jdk_libs' not in c:
-                          c += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n'
+                          c += '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"\n}\n'
                   with open(p, 'w') as f:
                       f.write(c)
 
-          # Fix namespace for AGP 8+ on older plugins (like :record)
           for p in ['android/build.gradle', 'android/build.gradle.kts']:
               if os.path.exists(p):
                   with open(p, 'r') as f:
                       c = f.read()
                   if 'subprojects' not in c:
                       if p.endswith('.kts'):
-                          c += '\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {\n            if (namespace == null) {\n                namespace = \"com.spotdrop.${project.name}\"\n            }\n        }\n    }\n}\n'
+                          c += '\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {\n            if (namespace == null) {\n                namespace = "com.spotdrop." + project.name\n            }\n        }\n    }\n}\n'
                       else:
-                          c += '\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty(\"android\")) {\n            project.android {\n                if (namespace == null) {\n                    namespace = \"com.spotdrop.${project.name}\"\n                }\n            }\n        }\n    }\n}\n'
+                          c += '\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty("android")) {\n            project.android {\n                if (namespace == null) {\n                    namespace = "com.spotdrop." + project.name\n                }\n            }\n        }\n    }\n}\n'
                   with open(p, 'w') as f:
                       f.write(c)
           print('Successfully configured Android build files!')
-          "
+          EOF
+          python3 fix_gradle.py
 
       - name: Get Dependencies
         run: flutter pub get
