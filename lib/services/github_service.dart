@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
@@ -19,7 +19,7 @@ class GitHubService {
   }
 
   // App & Backend Meta
-  static const String appVersion = "1.0.4";
+  static const String appVersion = "1.0.5";
   
   // 100% stabile OpenStreetMap Kacheln
   static const String openStreetMapTileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -272,6 +272,52 @@ class GitHubService {
         break;
       }
     }
+  }
+
+  Future<String?> getCallStatus(String callId) async {
+    final file = await _getFile('calls.json');
+    if (file != null && file['data'] is List) {
+      for (final c in (file['data'] as List).reversed) {
+        if (c['id'] == callId) {
+          return c['status']?.toString();
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<bool> sendCallVoiceChunk(String callId, Uint8List audioBytes) async {
+    if (_currentGroup == null || _userName == null) return false;
+    final file = await _getFile('calls.json');
+    final List list = file?['data'] ?? [];
+    final String? sha = file?['sha'];
+
+    for (final c in list) {
+      if (c['id'] == callId) {
+        c['last_audio_sender'] = _userName;
+        c['last_audio_base64'] = base64Encode(audioBytes);
+        c['last_audio_timestamp'] = DateTime.now().millisecondsSinceEpoch;
+        return await _updateFile('calls.json', list, sha, 'call: audio chunk from $_userName in $callId');
+      }
+    }
+    return false;
+  }
+
+  Future<Map<String, dynamic>?> fetchCallAudio(String callId) async {
+    final file = await _getFile('calls.json');
+    if (file != null && file['data'] is List) {
+      for (final c in (file['data'] as List).reversed) {
+        if (c['id'] == callId) {
+          return {
+            'status': c['status'],
+            'last_sender': c['last_audio_sender'],
+            'last_audio_base64': c['last_audio_base64'],
+            'last_audio_timestamp': c['last_audio_timestamp'],
+          };
+        }
+      }
+    }
+    return null;
   }
 
   // ==========================================================================
@@ -578,6 +624,8 @@ class GitHubService {
   Future<bool> sendChatMessage(
     String text, {
     Uint8List? imageBytes,
+    Uint8List? audioBytes,
+    int? audioDuration,
     String? audioNote,
     Map<String, dynamic>? replyTo,
   }) async {
@@ -598,6 +646,23 @@ class GitHubService {
       }
     }
 
+    String? audioUrl;
+    String? audioBase64;
+    if (audioBytes != null) {
+      audioBase64 = base64Encode(audioBytes);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final path = 'chat_media/audio_${currentGroupCode}_$timestamp.m4a';
+      final url = Uri.parse('https://api.github.com/repos/$_owner/$_repo/contents/$path');
+      final audioBody = {
+        'message': 'chat: voice memo from $_userName',
+        'content': audioBase64,
+      };
+      final res = await http.put(url, headers: _headers, body: jsonEncode(audioBody));
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        audioUrl = 'https://raw.githubusercontent.com/$_owner/$_repo/main/$path';
+      }
+    }
+
     final file = await _getFile('chat.json');
     final List list = file?['data'] ?? [];
     final String? sha = file?['sha'];
@@ -608,7 +673,10 @@ class GitHubService {
       'author': _userName ?? 'Anonymous',
       'text': text,
       'image_url': imageUrl,
-      'audio_note': audioNote,
+      'audio_url': audioUrl,
+      'audio_base64': audioBase64,
+      'audio_duration': audioDuration ?? 3,
+      'audio_note': audioNote ?? (audioBytes != null ? 'audio_${audioDuration ?? 3}s' : null),
       'reply_to': replyTo,
       'timestamp': DateTime.now().toIso8601String(),
     };
@@ -796,3 +864,5 @@ class GitHubService {
     return false;
   }
 }
+
+
