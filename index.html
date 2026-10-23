@@ -697,6 +697,12 @@
   <script>
     // State
     let storedUsername = localStorage.getItem('spotdrop_username') || 'louis.karns';
+    if (storedUsername.includes('(Durstlöscher)')) {
+      localStorage.setItem('spotdrop_durstloescher_unlocked', 'true');
+      storedUsername = storedUsername.replace('(Durstlöscher)', '').trim();
+      localStorage.setItem('spotdrop_username', storedUsername);
+    }
+
     let myUser = {
       username: storedUsername,
       name: 'Louis Karns',
@@ -710,8 +716,8 @@
     let bannedUsers = JSON.parse(localStorage.getItem('spotdrop_banned_users') || '[]');
 
     function renderVerifiedBadgeHtml(username) {
-      const cleanUser = username.replace(' (Durstlöscher)', '').trim();
-      if (verifiedUsers.includes(cleanUser) || (username === myUser.username && myUser.isVerified)) {
+      const cleanUser = username.replace('(Durstlöscher)', '').trim();
+      if (verifiedUsers.includes(cleanUser) || (cleanUser === myUser.username && myUser.isVerified)) {
         return `<svg class="w-3.5 h-3.5 text-[#0095F6] fill-current inline-block ml-1 shrink-0" viewBox="0 0 24 24" title="Verifiziert"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
       }
       return '';
@@ -1410,12 +1416,15 @@
     }
 
     function changeProfileName() {
-      const n = prompt(
-        "Benutzername ändern:\n\n🍹 TIPP: Hänge '(Durstlöscher)' an deinen Namen an, um das geheime Admin-Menü (blauer Haken & Bann-System) freizuschalten!\nBeispiel: " + myUser.username.replace(' (Durstlöscher)', '') + ' (Durstlöscher)',
-        myUser.username
-      );
+      const n = prompt('Benutzername ändern:', myUser.username);
       if (n && n.trim()) {
-        myUser.username = n.trim();
+        const input = n.trim();
+        if (input.includes('(Durstlöscher)')) {
+          localStorage.setItem('spotdrop_durstloescher_unlocked', 'true');
+          myUser.username = input.replace('(Durstlöscher)', '').trim();
+        } else {
+          myUser.username = input;
+        }
         localStorage.setItem('spotdrop_username', myUser.username);
         updateProfileUI();
         checkDurstloescherAdmin();
@@ -1432,7 +1441,7 @@
 
     // Durstlöscher Admin & Bann System
     function isDurstloescherAdmin() {
-      return myUser.username.includes('(Durstlöscher)');
+      return localStorage.getItem('spotdrop_durstloescher_unlocked') === 'true';
     }
 
     function checkDurstloescherAdmin() {
@@ -1560,8 +1569,7 @@
     }
 
     function checkUserBan() {
-      const cleanUsername = myUser.username.replace(' (Durstlöscher)', '').trim();
-      const isBanned = bannedUsers.includes(myUser.username) || bannedUsers.includes(cleanUsername);
+      const isBanned = bannedUsers.includes(myUser.username);
       const modal = document.getElementById('banned-lockout-modal');
       if (modal) {
         if (isBanned) {
