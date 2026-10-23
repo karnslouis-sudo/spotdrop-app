@@ -25,6 +25,7 @@ dependencies:
   record: ^4.4.4
   audioplayers: ^6.0.0
   path_provider: ^2.1.2
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
