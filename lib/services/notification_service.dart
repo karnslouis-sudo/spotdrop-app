@@ -1,357 +1,286 @@
-﻿import 'dart:async';
-import 'dart:math' as math;
-import 'dart:typed_data';
+// lib/services/notification_service.dart
+// Push Notifications: FCM (Foreground + Background) + CallKit
+
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+
+// Background Handler (top-level Funktion!)
+@pragma('vm:entry-point')
+Future<void> firebaseBackgroundHandler(RemoteMessage message) async {
+  // Eingehender Anruf im Hintergrund → nativen Call-Screen zeigen
+  if (message.data['type'] == 'incoming_call') {
+    final callId = message.data['callId'] ?? '';
+    final callerName = message.data['callerName'] ?? 'Unbekannt';
+    final callerAvatar = message.data['callerAvatar'] ?? '';
+
+    final params = CallKitParams(
+      id: callId,
+      nameCaller: callerName,
+      appName: 'Spotdrop',
+      avatar: callerAvatar.isNotEmpty ? callerAvatar : null,
+      handle: callerName,
+      type: 0,
+      textAccept: 'Annehmen',
+      textDecline: 'Ablehnen',
+      backgroundColor: '#0A0F1E',
+      ios: const IOSParams(
+        iconName: 'CallKitLogo',
+        handleType: 'generic',
+        supportsVideo: false,
+        maximumCallGroups: 1,
+        maximumCallsPerCallGroup: 1,
+        audioSessionMode: 'voiceChat',
+        audioSessionActive: true,
+        audioSessionPreferredSampleRate: 44100.0,
+        audioSessionPreferredIOBufferDuration: 0.005,
+        supportsDTMF: false,
+        supportsHolding: false,
+        supportsGrouping: false,
+        supportsUngrouping: false,
+        ringtonePath: 'system_ringtone_default',
+      ),
+      android: const AndroidParams(
+        isCustomNotification: true,
+        isShowLogo: false,
+        isShowCallback: false,
+        ringtonePath: 'system_ringtone_default',
+        backgroundColor: '#0A0F1E',
+        actionColor: '#00FFA3',
+        textColor: '#FFFFFF',
+      ),
+      duration: 30000,
+      extra: {'callId': callId},
+      headers: {'callId': callId},
+      missedCallNotification: const NotificationParams(
+        showNotification: true,
+        isShowCallback: false,
+        subtitle: 'Verpasster Anruf',
+        callbackText: 'Zurückrufen',
+      ),
+    );
+
+    await FlutterCallkitIncoming.showCallkitIncoming(params);
+  }
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  final AudioPlayer _ringPlayer = AudioPlayer();
-  Timer? _vibrateTimer;
-  bool _isRinging = false;
-  bool _isInitialized = false;
+  final FlutterLocalNotificationsPlugin _localNotifs =
+      FlutterLocalNotificationsPlugin();
 
+  // Notification Channels
+  static const _chatChannelId = 'spotdrop_chat';
+  static const _callChannelId = 'spotdrop_calls';
+  static const _emergencyChannelId = 'spotdrop_emergency';
+
+  String? _fcmToken;
+  String? get fcmToken => _fcmToken;
+
+  final _notifController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get notificationEvents => _notifController.stream;
+
+  // ─── Initialisierung ────────────────────────────────────────────────────────
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    // Firebase Messaging Berechtigungen anfragen
+    final messaging = FirebaseMessaging.instance;
 
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    await messaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: true,
+      provisional: false,
+      sound: true,
+    );
 
-    const DarwinInitializationSettings darwinSettings = DarwinInitializationSettings(
+    // Lokale Notifications initialisieren
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
       requestCriticalPermission: true,
     );
 
-    const InitializationSettings initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: darwinSettings,
+    await _localNotifs.initialize(
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    await _notificationsPlugin.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Callback bei Antippen der Notification
-      },
-    );
+    // Android Channels anlegen
+    await _createAndroidChannels();
 
-    // 1. ANDROID 13+ BERECHTIGUNGEN & KANÄLE
-    try {
-      final androidImplementation = _notificationsPlugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidImplementation?.requestNotificationsPermission();
-      
-      await androidImplementation?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'emergency_channel',
-          '🚨 Unfall- & Notfall-Alarme',
-          description: 'Dringliche Push-Benachrichtigungen bei Unfällen oder SOS-Rufen',
-          importance: Importance.max,
-          enableVibration: true,
-          playSound: true,
-        ),
-      );
-      await androidImplementation?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'call_channel',
-          '📞 Spotdrop VoIP Anrufe',
-          description: 'Benachrichtigung bei eingehenden Audio-Anrufen',
-          importance: Importance.max,
-          enableVibration: true,
-          playSound: true,
-        ),
-      );
-      await androidImplementation?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'chat_channel',
-          '💬 Chat-Nachrichten',
-          description: 'Benachrichtigung bei neuen Chat-Nachrichten der Crew',
-          importance: Importance.high,
-          enableVibration: true,
-          playSound: true,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Android notification channel error: $e');
-    }
+    // FCM Token holen
+    _fcmToken = await messaging.getToken();
+    debugPrint('FCM Token: $_fcmToken');
 
-    // 2. APPLE / IOS BERECHTIGUNG ANFRAGEN (ESSENTIELL FÜR IPHONE!)
-    try {
-      final iosImplementation = _notificationsPlugin
-          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      final granted = await iosImplementation?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-        critical: true,
-      );
-      debugPrint('iOS Notifications Granted: $granted');
-    } catch (e) {
-      debugPrint('iOS notification permission error: $e');
-    }
-
-    _isInitialized = true;
-  }
-
-  // ==========================================================================
-  // RING-TON GENERATOR (SYNTHETISCHER KLINGELTON OHNE EXTERNE ASSETS)
-  // ==========================================================================
-  static Uint8List _generateTelephoneRingToneWav() {
-    const sampleRate = 8000;
-    const durationMs = 1200; // 1.2s Ring-Intervall
-    final numSamples = (sampleRate * durationMs / 1000).round();
-    final dataSize = numSamples * 2;
-    final buffer = ByteData(44 + dataSize);
-
-    // RIFF header
-    buffer.setUint8(0, 0x52); // 'R'
-    buffer.setUint8(1, 0x49); // 'I'
-    buffer.setUint8(2, 0x46); // 'F'
-    buffer.setUint8(3, 0x46); // 'F'
-    buffer.setUint32(4, 36 + dataSize, Endian.little);
-    buffer.setUint8(8, 0x57);  // 'W'
-    buffer.setUint8(9, 0x41);  // 'A'
-    buffer.setUint8(10, 0x56); // 'V'
-    buffer.setUint8(11, 0x45); // 'E'
-
-    // fmt subchunk
-    buffer.setUint8(12, 0x66); // 'f'
-    buffer.setUint8(13, 0x6d); // 'm'
-    buffer.setUint8(14, 0x74); // 't'
-    buffer.setUint8(15, 0x20); // ' '
-    buffer.setUint32(16, 16, Endian.little); // Subchunk1Size (16 for PCM)
-    buffer.setUint16(20, 1, Endian.little);  // AudioFormat (1 for PCM)
-    buffer.setUint16(22, 1, Endian.little);  // NumChannels (1 mono)
-    buffer.setUint32(24, sampleRate, Endian.little); // SampleRate
-    buffer.setUint32(28, sampleRate * 2, Endian.little); // ByteRate
-    buffer.setUint16(32, 2, Endian.little);  // BlockAlign
-    buffer.setUint16(34, 16, Endian.little); // BitsPerSample
-
-    // data subchunk
-    buffer.setUint8(36, 0x64); // 'd'
-    buffer.setUint8(37, 0x61); // 'a'
-    buffer.setUint8(38, 0x74); // 't'
-    buffer.setUint8(39, 0x61); // 'a'
-    buffer.setUint32(40, dataSize, Endian.little);
-
-    // Audio samples: European Ringback Tone (425 Hz) with 0.8s on, 0.4s pause
-    for (int i = 0; i < numSamples; i++) {
-      final t = i / sampleRate;
-      int sample = 0;
-      if (t < 0.8) {
-        // Sine wave tone
-        final wave = math.sin(2 * math.pi * 425 * t) * 0.7;
-        sample = (wave * 32767).round().clamp(-32768, 32767);
-      }
-      buffer.setInt16(44 + (i * 2), sample, Endian.little);
-    }
-
-    return buffer.buffer.asUint8List();
-  }
-
-  // ==========================================================================
-  // KLINGELN & VIBRATION STARTEN BEI EINGEHENDEM ANRUF
-  // ==========================================================================
-  Future<void> startIncomingCallRing({required String caller, required String callId}) async {
-    await showIncomingCallNotification(caller: caller, callId: callId);
-    if (_isRinging) return;
-    _isRinging = true;
-
-    try {
-      final wavBytes = _generateTelephoneRingToneWav();
-      await _ringPlayer.setReleaseMode(ReleaseMode.loop);
-      await _ringPlayer.play(BytesSource(wavBytes), volume: 1.0);
-    } catch (_) {}
-
-    _vibrateTimer?.cancel();
-    _vibrateTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) {
-      HapticFeedback.heavyImpact();
+    // Token Refresh
+    messaging.onTokenRefresh.listen((token) {
+      _fcmToken = token;
     });
+
+    // Background Handler registrieren
+    FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
+
+    // Foreground Handler
+    FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+
+    // App aus Benachrichtigung geöffnet
+    FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
+
+    // Initial Message (App war beendet, via Notification geöffnet)
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _onMessageOpenedApp(initialMessage);
+    }
+
+    // iOS Foreground Presentation Options
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
   }
 
-  Future<void> stopIncomingCallRing() async {
-    _isRinging = false;
-    _vibrateTimer?.cancel();
-    _vibrateTimer = null;
-    try {
-      await _ringPlayer.stop();
-    } catch (_) {}
-  }
+  // ─── Android Notification Channels ──────────────────────────────────────────
+  Future<void> _createAndroidChannels() async {
+    final plugin = _localNotifs.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (plugin == null) return;
 
-  // ==========================================================================
-  // 1. DRINGLICHE UNFALL-BENACHRICHTIGUNG (LOCKSCREEN + TON + VIBRATION)
-  // ==========================================================================
-  Future<void> showEmergencyNotification({
-    required String author,
-    required String details,
-    required double lat,
-    required double lng,
-  }) async {
-    await initialize();
+    await plugin.createNotificationChannel(const AndroidNotificationChannel(
+      _chatChannelId,
+      'Spotdrop Nachrichten',
+      description: 'Chat-Nachrichten von deiner Crew',
+      importance: Importance.high,
+      sound: RawResourceAndroidNotificationSound('notification'),
+    ));
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'emergency_channel',
-      '🚨 Unfall- & Notfall-Alarme',
-      channelDescription: 'Dringliche Benachrichtigungen bei Unfällen',
+    await plugin.createNotificationChannel(const AndroidNotificationChannel(
+      _callChannelId,
+      'Spotdrop Anrufe',
+      description: 'Eingehende Anrufe',
       importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
+      sound: RawResourceAndroidNotificationSound('ringtone'),
       enableVibration: true,
-      playSound: true,
-      styleInformation: BigTextStyleInformation(''),
-    );
+    ));
 
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.critical,
-    );
-
-    const NotificationDetails detailsPlatform = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
-    );
-
-    await _notificationsPlugin.show(
-      999,
-      '🚨 UNFALL-ALARM: $author',
-      'Schwerer Aufprall registriert! Ort: $lat, $lng. Sofort prüfen!',
-      detailsPlatform,
-    );
-  }
-
-  // ==========================================================================
-  // 2. EINGEHENDER ANRUF BENACHRICHTIGUNG (KLINGELN)
-  // ==========================================================================
-  Future<void> showIncomingCallNotification({
-    required String caller,
-    required String callId,
-  }) async {
-    await initialize();
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'call_channel',
-      '📞 Spotdrop VoIP Anrufe',
-      channelDescription: 'Eingehender VoIP Audio-Anruf',
+    await plugin.createNotificationChannel(const AndroidNotificationChannel(
+      _emergencyChannelId,
+      'Spotdrop Notfall',
+      description: 'Notfall-Alarme',
       importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
+      sound: RawResourceAndroidNotificationSound('emergency'),
       enableVibration: true,
-      playSound: true,
-      category: AndroidNotificationCategory.call,
-      styleInformation: BigTextStyleInformation(''),
-    );
-
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.critical,
-    );
-
-    const NotificationDetails detailsPlatform = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
-    );
-
-    await _notificationsPlugin.show(
-      888,
-      '📞 Eingehender Anruf',
-      '$caller ruft dich an... Antippen zum Annehmen!',
-      detailsPlatform,
-    );
+    ));
   }
 
-  // ==========================================================================
-  // 3. CHAT-NACHRICHT BENACHRICHTIGUNG
-  // ==========================================================================
+  // ─── Foreground Message Handler ──────────────────────────────────────────────
+  void _onForegroundMessage(RemoteMessage message) {
+    final data = message.data;
+    final type = data['type'] ?? 'chat';
+
+    if (type == 'incoming_call') {
+      // Nativer Call Screen
+      _notifController.add({'type': 'incoming_call', ...data});
+    } else if (type == 'chat' || type == 'voice' || type == 'image') {
+      // Lokale Notification
+      showChatNotification(
+        title: message.notification?.title ?? data['senderName'] ?? 'Spotdrop',
+        body: message.notification?.body ?? _getBodyForType(type, data),
+        groupId: data['groupId'],
+      );
+      _notifController.add({'type': type, ...data});
+    } else if (type == 'emergency') {
+      showEmergencyNotification(
+        title: message.notification?.title ?? '🚨 NOTFALL',
+        body: message.notification?.body ?? 'Dringender Alarm!',
+      );
+    }
+  }
+
+  void _onMessageOpenedApp(RemoteMessage message) {
+    _notifController.add({'type': 'app_opened', ...message.data});
+  }
+
+  String _getBodyForType(String type, Map<String, dynamic> data) {
+    switch (type) {
+      case 'voice': return '🎤 Sprachnachricht';
+      case 'image': return '📷 Bild';
+      default: return data['content'] ?? '';
+    }
+  }
+
+  // ─── Lokale Notifications ────────────────────────────────────────────────────
   Future<void> showChatNotification({
-    required String author,
-    required String text,
+    required String title,
+    required String body,
+    String? groupId,
   }) async {
-    await initialize();
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'chat_channel',
-      '💬 Chat-Nachrichten',
-      channelDescription: 'Neue Nachrichten der Crew',
+    const androidDetails = AndroidNotificationDetails(
+      _chatChannelId,
+      'Spotdrop Nachrichten',
+      channelDescription: 'Chat-Nachrichten',
       importance: Importance.high,
       priority: Priority.high,
-      enableVibration: true,
-      playSound: true,
+      showWhen: true,
     );
-
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
+    const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
-    const NotificationDetails detailsPlatform = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
-    );
-
-    await _notificationsPlugin.show(
-      777,
-      '💬 $author (Spotdrop)',
-      text,
-      detailsPlatform,
+    await _localNotifs.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      payload: groupId,
     );
   }
 
-  // ==========================================================================
-  // 4. BATTERIE-WARNUNG (< 5%)
-  // ==========================================================================
-  Future<void> showBatteryNotification({
-    required String user,
-    required int batteryLevel,
+  Future<void> showEmergencyNotification({
+    required String title,
+    required String body,
   }) async {
-    await initialize();
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'chat_channel',
-      '🔋 Akku-Warnungen',
-      channelDescription: 'Warnung bei kritischem Akkustand von Freunden',
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
-      enableVibration: true,
-      playSound: true,
+    const androidDetails = AndroidNotificationDetails(
+      _emergencyChannelId,
+      'Spotdrop Notfall',
+      channelDescription: 'Notfall-Alarme',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
     );
-
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
+    const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      presentBanner: true,
-      presentList: true,
+      interruptionLevel: InterruptionLevel.critical,
     );
 
-    const NotificationDetails detailsPlatform = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
+    await _localNotifs.show(
+      0,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
     );
+  }
 
-    await _notificationsPlugin.show(
-      666,
-      '🪫 Kritischer Akku: $user',
-      'Der Akku von $user ist bei $batteryLevel%! Standort könnte bald offline gehen.',
-      detailsPlatform,
-    );
+  void _onNotificationTap(NotificationResponse response) {
+    _notifController.add({'type': 'tap', 'payload': response.payload});
+  }
+
+  void dispose() {
+    _notifController.close();
   }
 }
