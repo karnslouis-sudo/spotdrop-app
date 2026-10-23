@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/github_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/glass_container.dart';
 
 class VaultScreen extends StatefulWidget {
@@ -36,6 +37,7 @@ class _VaultScreenState extends State<VaultScreen> {
   }
 
   Future<void> _takeAndUploadSnap(ImageSource source) async {
+    final accent = ThemeService().accentColor;
     try {
       final XFile? file = await _picker.pickImage(
         source: source,
@@ -57,9 +59,9 @@ class _VaultScreenState extends State<VaultScreen> {
         setState(() => _isUploading = false);
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFF00FFA3),
-              content: Text('📸 Snap erfolgreich in GitHub Vault gespeichert!', style: TextStyle(color: Colors.black)),
+            SnackBar(
+              backgroundColor: accent,
+              content: const Text('📸 Snap erfolgreich in GitHub Vault gespeichert!', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           );
           await _fetchSnaps();
@@ -79,13 +81,13 @@ class _VaultScreenState extends State<VaultScreen> {
     }
   }
 
-  // VOLLBILD-VIEWER MIT PINCH-ZOOM & LÖSCH-FUNKTION
   void _openFullScreenSnap(Map<String, dynamic> snap) {
     final url = snap['image_url'] ?? '';
     final author = snap['author'] ?? 'Anonymous';
     final caption = snap['caption'] ?? '';
     final timestamp = snap['timestamp'] ?? '';
     final id = snap['id']?.toString() ?? '';
+    final accent = ThemeService().accentColor;
 
     Navigator.push(
       context,
@@ -130,8 +132,8 @@ class _VaultScreenState extends State<VaultScreen> {
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
                           onPressed: () async {
-                            Navigator.pop(dCtx); // close dialog
-                            Navigator.pop(ctx);  // close fullscreen
+                            Navigator.pop(dCtx);
+                            Navigator.pop(ctx);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Lösche Foto vom Server...')),
                             );
@@ -160,8 +162,8 @@ class _VaultScreenState extends State<VaultScreen> {
               child: CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.contain,
-                placeholder: (_, __) => const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00FFA3)),
+                placeholder: (_, __) => Center(
+                  child: CircularProgressIndicator(color: accent),
                 ),
                 errorWidget: (_, __, ___) => const Center(
                   child: Icon(Icons.broken_image, size: 60, color: Colors.grey),
@@ -176,6 +178,8 @@ class _VaultScreenState extends State<VaultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final accent = ThemeService().accentColor;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0D14),
       appBar: AppBar(
@@ -191,7 +195,7 @@ class _VaultScreenState extends State<VaultScreen> {
       body: Stack(
         children: [
           _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FFA3)))
+              ? Center(child: CircularProgressIndicator(color: accent))
               : _snaps.isEmpty
                   ? Center(
                       child: Column(
@@ -215,7 +219,7 @@ class _VaultScreenState extends State<VaultScreen> {
                             icon: const Icon(Icons.camera_alt),
                             label: const Text('Ersten Snap machen'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00FFA3),
+                              backgroundColor: accent,
                               foregroundColor: Colors.black,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
@@ -244,11 +248,11 @@ class _VaultScreenState extends State<VaultScreen> {
                               fit: BoxFit.cover,
                               placeholder: (_, __) => Container(
                                 color: const Color(0xFF161E2E),
-                                child: const Center(
+                                child: Center(
                                   child: SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFA3)),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: accent),
                                   ),
                                 ),
                               ),
@@ -265,13 +269,13 @@ class _VaultScreenState extends State<VaultScreen> {
           if (_isUploading)
             Container(
               color: Colors.black.withOpacity(0.7),
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Color(0xFF00FFA3)),
-                    SizedBox(height: 16),
-                    Text(
+                    CircularProgressIndicator(color: accent),
+                    const SizedBox(height: 16),
+                    const Text(
                       'Lade Snap auf GitHub Server hoch...',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
@@ -285,7 +289,7 @@ class _VaultScreenState extends State<VaultScreen> {
         padding: const EdgeInsets.only(bottom: 80),
         child: FloatingActionButton.extended(
           onPressed: _isUploading ? null : () => _takeAndUploadSnap(ImageSource.camera),
-          backgroundColor: const Color(0xFF00FFA3),
+          backgroundColor: accent,
           foregroundColor: Colors.black,
           icon: const Icon(Icons.camera_alt),
           label: const Text('Reinsnappen', style: TextStyle(fontWeight: FontWeight.bold)),
