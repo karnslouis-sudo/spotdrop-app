@@ -4,8 +4,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:battery_plus/battery_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/github_service.dart';
 import '../widgets/glass_container.dart';
+import 'call_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -22,6 +24,7 @@ class _MapScreenState extends State<MapScreen> {
   int _batteryLevel = 100;
   List<Map<String, dynamic>> _spots = [];
   List<Map<String, dynamic>> _memberLocations = [];
+  List<Map<String, dynamic>> _alerts = [];
   bool _isLoading = true;
   Timer? _locationSyncTimer;
 
@@ -29,7 +32,6 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _initMapData();
-    // Alle 10 Sekunden eigenen Standort & Akku synchronisieren und andere Crew-Mitglieder laden
     _locationSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) => _syncPresence(silent: true));
   }
 
@@ -48,14 +50,12 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _determinePositionAndBattery() async {
     try {
-      // 1. Akku auslesen
       try {
         _batteryLevel = await _battery.batteryLevel;
       } catch (_) {
-        _batteryLevel = 85; // Fallback
+        _batteryLevel = 90;
       }
 
-      // 2. GPS auslesen
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return;
 
@@ -80,23 +80,205 @@ class _MapScreenState extends State<MapScreen> {
     final service = GitHubService();
     if (service.currentGroup == null) return;
 
-    // Eigene Position & Akku hochladen
     await service.updateLocationAndBattery(
       lat: _currentPosition.latitude,
       lng: _currentPosition.longitude,
       batteryLevel: _batteryLevel,
     );
 
-    // Andere Mitglieder & Spots laden
     final members = await service.fetchMemberLocations();
     final spots = await service.fetchSpots();
+    final alerts = await service.fetchEmergencyAlerts();
 
     if (mounted) {
       setState(() {
         _memberLocations = members;
         _spots = spots;
+        _alerts = alerts;
       });
     }
+  }
+
+  void _showMemberDetailModal(Map<String, dynamic> member) {
+    final name = member['user'] ?? 'Crew-Mitglied';
+    final battery = (member['battery'] as num?)?.toInt() ?? 100;
+    final lat = (member['lat'] as num?)?.toDouble() ?? 0.0;
+    final lng = (member['lng'] as num?)?.toDouble() ?? 0.0;
+    final updatedAt = member['updated_at'] as String?;
+    final isLowBattery = battery <= 5;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+        child: LiquidGlassCard(
+          borderRadius: 28,
+          borderColor: isLowBattery ? Colors.redAccent.withOpacity(0.6) : const Color(0xFF00FFA3).withOpacity(0.4),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: isLowBattery 
+                            ? [Colors.redAccent, Colors.orangeAccent]
+                            : [const Color(0xFF6366F1), const Color(0xFF00FFA3)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3)).withOpacity(0.4),
+                          blurRadius: 14,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        name.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              isLowBattery ? Icons.battery_alert : Icons.battery_charging_full,
+                              color: isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$battery% Akku ${isLowBattery ? "⚠️ KRITISCH" : "Normal"}',
+                              style: TextStyle(
+                                color: isLowBattery ? Colors.redAccent : const Color(0xFF00FFA3),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close, color: Colors.white60),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white12),
+              const SizedBox(height: 10),
+
+              // Standort Info
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141926).withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('GPS-Koordinaten:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        Text('${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}', style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Status:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        Row(
+                          children: [
+                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00FFA3), shape: BoxShape.circle)),
+                            const SizedBox(width: 6),
+                            const Text('Live verbunden', style: TextStyle(color: Color(0xFF00FFA3), fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FFA3),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CallScreen(
+                              callerName: name,
+                              isIncoming: false,
+                              onEndCall: () => Navigator.pop(context),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.call, size: 18),
+                      label: const Text('Anrufen', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        final uri = Uri.parse('https://maps.google.com/?q=$lat,$lng');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      icon: const Icon(Icons.directions, color: Color(0xFF6366F1), size: 18),
+                      label: const Text('Route', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _promptAddSpot() async {
@@ -189,7 +371,7 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: const Color(0xFF0A0D14),
       body: Stack(
         children: [
-          // 100% KUGELSICHERE & STABILE DARK-MATTER MAP (KEIN WEISSER BILDSCHIRM!)
+          // OPENSTREETMAP (OFFIZIELLER KARTEN-PROVIDER)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -200,19 +382,17 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: GitHubService.openStreetMapTileUrl,
                 userAgentPackageName: 'com.spotdrop.app',
                 maxZoom: 19,
-                retinaMode: true,
               ),
               MarkerLayer(
                 markers: [
                   // 1. EIGENER STANDORT MIT AKKU-PILL
                   Marker(
                     point: _currentPosition,
-                    width: 70,
-                    height: 65,
+                    width: 76,
+                    height: 70,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -230,25 +410,25 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                         const SizedBox(height: 2),
                         Container(
-                          width: 26,
-                          height: 26,
+                          width: 28,
+                          height: 28,
                           decoration: BoxDecoration(
                             color: const Color(0xFF00FFA3),
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2.5),
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF00FFA3).withOpacity(0.6), blurRadius: 12, spreadRadius: 2),
+                              BoxShadow(color: const Color(0xFF00FFA3).withOpacity(0.7), blurRadius: 14, spreadRadius: 2),
                             ],
                           ),
                           child: const Center(
-                            child: Icon(Icons.person, size: 14, color: Colors.black),
+                            child: Icon(Icons.person, size: 16, color: Colors.black),
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // 2. STANDORTE DER ANDEREN MITGLIEDER (LIVE TRACKING + AKKU)
+                  // 2. STANDORTE DER ANDEREN MITGLIEDER (ANTIPPEND FÜR INFOS & ANRUF)
                   ..._memberLocations.where((m) => m['user'] != myName).map((member) {
                     final lat = (member['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (member['lng'] as num?)?.toDouble() ?? 0.0;
@@ -258,21 +438,17 @@ class _MapScreenState extends State<MapScreen> {
 
                     return Marker(
                       point: LatLng(lat, lng),
-                      width: 80,
-                      height: 70,
+                      width: 86,
+                      height: 74,
                       child: GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('👤 $name • Akku: $battery% • Vor Kurzem aktiv')),
-                          );
-                        },
+                        onTap: () => _showMemberDetailModal(member),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: isLowBattery ? Colors.red.shade900 : Colors.black.withOpacity(0.85),
+                                color: isLowBattery ? Colors.red.shade900 : Colors.black.withOpacity(0.88),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: isLowBattery ? Colors.redAccent : const Color(0xFF6366F1), 
@@ -300,15 +476,15 @@ class _MapScreenState extends State<MapScreen> {
                             ),
                             const SizedBox(height: 2),
                             Container(
-                              width: 28,
-                              height: 28,
+                              width: 30,
+                              height: 30,
                               decoration: BoxDecoration(
                                 color: isLowBattery ? Colors.redAccent : const Color(0xFF6366F1),
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 2),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (isLowBattery ? Colors.redAccent : const Color(0xFF6366F1)).withOpacity(0.5), 
+                                    color: (isLowBattery ? Colors.redAccent : const Color(0xFF6366F1)).withOpacity(0.55), 
                                     blurRadius: 10,
                                   ),
                                 ],
@@ -316,7 +492,7 @@ class _MapScreenState extends State<MapScreen> {
                               child: Center(
                                 child: Text(
                                   name.substring(0, 1).toUpperCase(),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                             ),
@@ -326,7 +502,41 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   }),
 
-                  // 3. SPOTS & DROPS DER GRUPPE
+                  // 3. UNFALL / SOS BEACONS AUF DER KARTE
+                  ..._alerts.map((alert) {
+                    final lat = (alert['lat'] as num?)?.toDouble() ?? 0.0;
+                    final lng = (alert['lng'] as num?)?.toDouble() ?? 0.0;
+                    final user = alert['user'] ?? 'SOS';
+
+                    return Marker(
+                      point: LatLng(lat, lng),
+                      width: 50,
+                      height: 50,
+                      child: GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.redAccent,
+                              content: Text('🚨 NOTFALL-ORT von $user! Details: ${alert['details']}'),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(color: Colors.redAccent.withOpacity(0.8), blurRadius: 16, spreadRadius: 4),
+                            ],
+                          ),
+                          child: const Icon(Icons.emergency, color: Colors.white, size: 24),
+                        ),
+                      ),
+                    );
+                  }),
+
+                  // 4. SPOTS & DROPS DER GRUPPE
                   ..._spots.map((spot) {
                     final lat = (spot['lat'] as num?)?.toDouble() ?? 0.0;
                     final lng = (spot['lng'] as num?)?.toDouble() ?? 0.0;
@@ -368,12 +578,12 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // TOP LIQUID GLASS PILL
+          // TOP LIQUID GLASS STATUS PILL
           Positioned(
             top: 40,
             left: 16,
             right: 16,
-            child: GlassContainer(
+            child: LiquidGlassCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               borderRadius: 24,
               child: Row(
@@ -398,7 +608,7 @@ class _MapScreenState extends State<MapScreen> {
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           Text(
-                            '${_memberLocations.length} Personen live • ${_spots.length} Spots',
+                            '${_memberLocations.length} Crew-Mitglieder • OpenStreetMap',
                             style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
                           ),
                         ],
@@ -414,7 +624,7 @@ class _MapScreenState extends State<MapScreen> {
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       IconButton(
                         icon: const Icon(Icons.refresh, color: Colors.white70, size: 18),
                         onPressed: () => _syncPresence(silent: false),
@@ -429,12 +639,12 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // BOTTOM LIQUID GLASS ACTION BUTTON
+          // BOTTOM LIQUID GLASS ACTION BUTTON (ABGEHOBEN, KEINE ÜBERLAPPUNG MIT BOTTOM NAV!)
           Positioned(
-            bottom: 24,
+            bottom: 96,
             left: 20,
             right: 20,
-            child: GlassContainer(
+            child: LiquidGlassCard(
               borderRadius: 26,
               padding: const EdgeInsets.all(4),
               child: ElevatedButton.icon(
