@@ -1,8 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/github_service.dart';
 import '../widgets/glass_container.dart';
+import 'call_screen.dart';
 
 class HubScreen extends StatefulWidget {
   final VoidCallback onChangeGroup;
@@ -16,12 +21,14 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   late TabController _tabController;
   final _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _picker = ImagePicker();
   
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _expenses = [];
   List<String> _groupMembers = [];
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isRecordingVoice = false;
   Timer? _pollingTimer;
 
   @override
@@ -51,7 +58,6 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     final service = GitHubService();
     if (service.currentGroup == null) return;
 
-    // Prüfen, ob der Nutzer gekickt wurde
     final wasKicked = await service.checkIfKicked();
     if (wasKicked && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,27 +84,135 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     }
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendMessage({Uint8List? imageBytes, String? audioNote}) async {
     final text = _msgController.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if ((text.isEmpty && imageBytes == null && audioNote == null) || _isSending) return;
 
     setState(() => _isSending = true);
-    _msgController.clear();
+    if (text.isNotEmpty) _msgController.clear();
 
-    final success = await GitHubService().sendChatMessage(text);
+    final success = await GitHubService().sendChatMessage(
+      text.isNotEmpty ? text : (imageBytes != null ? '📷 Foto gesendet' : '🎙️ Sprachnachricht'),
+      imageBytes: imageBytes,
+      audioNote: audioNote,
+    );
+
     if (mounted) {
       setState(() => _isSending = false);
       if (success) {
         await _pollUpdates();
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent + 60,
+            _scrollController.position.maxScrollExtent + 80,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
         }
       }
     }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 65,
+        maxWidth: 800,
+      );
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      await _sendMessage(imageBytes: bytes);
+    } catch (_) {}
+  }
+
+  void _simulateVoiceNote() {
+    setState(() => _isRecordingVoice = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 2),
+        backgroundColor: Color(0xFF6366F1),
+        content: Text('🎙️ Sprachnachricht aufgenommen (0:04)... Wird gesendet!'),
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 1800), () async {
+      if (mounted) {
+        setState(() => _isRecordingVoice = false);
+        await _sendMessage(audioNote: 'audio_note_4s');
+      }
+    });
+  }
+
+  void _startAudioCall() {
+    final service = GitHubService();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => LiquidGlassCard(
+        borderRadius: 28,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.call, color: Color(0xFF00FFA3)),
+                SizedBox(width: 8),
+                Text('VoIP Audio-Anruf starten', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(color: Color(0xFF00FFA3), shape: BoxShape.circle),
+                child: const Icon(Icons.group, color: Colors.black, size: 20),
+              ),
+              title: const Text('Alle in der Crew anrufen', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('Klingelt bei allen Gruppen-Mitgliedern', style: TextStyle(color: Colors.grey, fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                service.initiateCall(receiver: 'Crew');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CallScreen(
+                      callerName: 'Crew-Anruf (${service.currentGroupName})',
+                      isIncoming: false,
+                      onEndCall: () => Navigator.pop(context),
+                    ),
+                  ),
+                );
+              },
+            ),
+            ..._groupMembers.where((m) => m != service.userName).map((member) => ListTile(
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFF6366F1),
+                child: Text(member.substring(0, 1).toUpperCase(), style: const TextStyle(color: Colors.white)),
+              ),
+              title: Text(member, style: const TextStyle(color: Colors.white)),
+              trailing: const Icon(Icons.phone, color: Color(0xFF00FFA3), size: 20),
+              onTap: () {
+                Navigator.pop(ctx);
+                service.initiateCall(receiver: member);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CallScreen(
+                      callerName: member,
+                      isIncoming: false,
+                      onEndCall: () => Navigator.pop(context),
+                    ),
+                  ),
+                );
+              },
+            )),
+          ],
+        ),
+      ),
+    );
   }
 
   void _copyCode() {
@@ -114,7 +228,6 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     }
   }
 
-  // DIALOG: BESTÄTIGUNG ZUM VERLASSEN DER GRUPPE (SICHERHEITSABFRAGE)
   void _confirmLeaveGroup() {
     final groupName = GitHubService().currentGroupName ?? 'Gruppe';
     showDialog(
@@ -159,17 +272,82 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 
-  // DIALOG: MITGLIEDERLISTE & KICK-FUNKTION (NUR FÜR ERSTELLER)
+  // DIALOG: ENDGÜLTIGE LÖSCHUNG DER GRUPPE & VERNICHTUNG ALLER DATEIEN
+  void _confirmPermanentGroupDeletion() {
+    final service = GitHubService();
+    final groupName = service.currentGroupName ?? 'Gruppe';
+    final groupCode = service.currentGroupCode ?? '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A0A0E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Colors.redAccent, width: 2),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.redAccent, size: 28),
+            SizedBox(width: 8),
+            Text('GRUPPE VERNICHTEN?', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ACHTUNG: Dies löscht "$groupName" ($groupCode) UNWIDERRUFLICH!',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Folgendes passiert auf dem GitHub-Server:\n'
+              '• Alle geteilten Fotos im Tresor werden physisch gelöscht\n'
+              '• Alle Chat-Nachrichten und Sprachmemos werden entfernt\n'
+              '• Alle Spot-Splits und GPS-Spots werden vernichtet\n'
+              '• Der Gruppenname & Code werden sofort wieder freigegeben!',
+              style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Lösche Gruppe und vernichte alle GitHub-Dateien...')),
+              );
+              await service.deleteGroupPermanently(groupCode);
+              widget.onChangeGroup();
+            },
+            child: const Text('Endgültig zerstören', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openMembersModal() {
     final service = GitHubService();
     final isCreator = service.isGroupCreator;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF101522),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
+        builder: (ctx, setModalState) => LiquidGlassCard(
+          borderRadius: 28,
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -181,34 +359,37 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('👥 Crew-Mitglieder', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                       Text(
-                        isCreator ? '👑 Du bist der Ersteller dieser Gruppe (Admin)' : 'Mitglieder in dieser Gruppe',
-                        style: TextStyle(fontSize: 11, color: isCreator ? const Color(0xFF00FFA3) : Colors.grey),
+                        'Mitglieder (${_groupMembers.length})',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      Text(
+                        isCreator ? 'Admin-Bereich (Ersteller: Du)' : 'Crew-Mitglieder',
+                        style: TextStyle(color: isCreator ? const Color(0xFF00FFA3) : Colors.grey, fontSize: 11),
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
                     onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close, color: Colors.white60),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: _groupMembers.length,
-                  itemBuilder: (context, index) {
-                    final member = _groupMembers[index];
+                  itemBuilder: (context, idx) {
+                    final member = _groupMembers[idx];
                     final isMe = member == service.userName;
-                    final isOwner = member == service.currentGroup?['created_by'];
+                    final isMemberCreator = member == service.currentGroup?['created_by'];
 
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
+                      margin: const EdgeInsets.symmetric(vertical: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF161E2E),
+                        color: const Color(0xFF141926).withOpacity(0.8),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.white.withOpacity(0.08)),
                       ),
@@ -219,68 +400,43 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                             children: [
                               CircleAvatar(
                                 radius: 16,
-                                backgroundColor: isOwner ? const Color(0xFF00FFA3) : const Color(0xFF6366F1),
+                                backgroundColor: isMemberCreator ? const Color(0xFF00FFA3) : const Color(0xFF6366F1),
                                 child: Text(
-                                  member.substring(0, 1).toUpperCase(),
-                                  style: TextStyle(color: isOwner ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  member.isNotEmpty ? member.substring(0, 1).toUpperCase() : '?',
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    '$member ${isMe ? "(Du)" : ""}',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  Row(
+                                    children: [
+                                      Text(member, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                      if (isMe)
+                                        const Text(' (Du)', style: TextStyle(color: Color(0xFF00FFA3), fontSize: 11)),
+                                    ],
                                   ),
-                                  if (isOwner)
-                                    const Text('👑 Gruppen-Ersteller', style: TextStyle(color: Color(0xFF00FFA3), fontSize: 10)),
+                                  Text(
+                                    isMemberCreator ? '👑 Ersteller' : 'Mitglied',
+                                    style: TextStyle(color: isMemberCreator ? Colors.amberAccent : Colors.grey.shade400, fontSize: 10),
+                                  ),
                                 ],
                               ),
                             ],
                           ),
-
-                          // KICK BUTTON: NUR DER ERSTELLER KANN ANDERE KICKEN
                           if (isCreator && !isMe)
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red.withOpacity(0.18),
-                                foregroundColor: Colors.redAccent,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
+                            IconButton(
+                              icon: const Icon(Icons.person_remove, color: Colors.redAccent, size: 18),
+                              tooltip: 'Aus Gruppe kicken',
                               onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: ctx,
-                                  builder: (c) => AlertDialog(
-                                    backgroundColor: const Color(0xFF141926),
-                                    title: Text('$member kicken?'),
-                                    content: Text('Möchtest du $member wirklich aus der Gruppe entfernen?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Abbrechen')),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                        onPressed: () => Navigator.pop(c, true),
-                                        child: const Text('Kicken'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-
-                                if (confirm == true) {
-                                  final success = await service.kickMember(member);
-                                  if (success) {
-                                    setModalState(() {
-                                      _groupMembers.remove(member);
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('🚫 $member wurde aus der Gruppe gekickt.')),
-                                    );
-                                  }
+                                final success = await service.kickMember(member);
+                                if (success) {
+                                  final updated = await service.fetchGroupMembers();
+                                  setModalState(() => _groupMembers = updated);
+                                  setState(() => _groupMembers = updated);
                                 }
                               },
-                              child: const Text('Kicken', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                             ),
                         ],
                       ),
@@ -288,6 +444,29 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   },
                 ),
               ),
+
+              if (isCreator) ...[
+                const SizedBox(height: 16),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade900.withOpacity(0.8),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.redAccent)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _confirmPermanentGroupDeletion();
+                    },
+                    icon: const Icon(Icons.delete_forever, size: 20),
+                    label: const Text('Gruppe endgültig vernichten & Dateien löschen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -295,163 +474,215 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 
-  // DIALOG: RECHNUNG AUFTEILEN (SPOT-SPLIT)
+  // SPOT-SPLIT DETAIL & LÖSCHEN
+  void _openExpenseDetail(Map<String, dynamic> exp) {
+    final title = exp['title'] ?? 'Ausgabe';
+    final total = (exp['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final perPerson = (exp['amount_per_person'] as num?)?.toDouble() ?? 0.0;
+    final paidBy = exp['paid_by'] ?? 'Jemand';
+    final splitBetween = List<String>.from(exp['split_between'] ?? []);
+    final id = exp['id']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => LiquidGlassCard(
+        borderRadius: 28,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.receipt_long, color: Color(0xFF00FFA3)),
+                    const SizedBox(width: 8),
+                    Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white60)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: const Color(0xFF141926).withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Gesamtbetrag:', style: TextStyle(color: Colors.grey)),
+                      Text('€ ${total.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00FFA3), fontWeight: FontWeight.bold, fontSize: 18)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Bezahlt von:', style: TextStyle(color: Colors.grey)),
+                      Text(paidBy, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Anteil pro Person:', style: TextStyle(color: Colors.grey)),
+                      Text('€ ${perPerson.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Aufgeteilt auf (${splitBetween.length} Personen):', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: splitBetween.map((name) => Chip(
+                backgroundColor: const Color(0xFF1A2338),
+                label: Text(name, style: const TextStyle(color: Colors.white, fontSize: 11)),
+              )).toList(),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await GitHubService().deleteExpense(id);
+                  await _pollUpdates();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Abrechnung beglichen und gelöscht!')),
+                  );
+                },
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Als beglichen markieren & löschen', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openAddExpenseModal() {
     final titleController = TextEditingController();
     final amountController = TextEditingController();
-    final selectedMembers = Set<String>.from(_groupMembers); // Standard: alle ausgewählt
+    final selectedMembers = List<String>.from(_groupMembers);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF101522),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) {
-          final totalAmount = double.tryParse(amountController.text.replaceAll(',', '.')) ?? 0.0;
-          final splitCount = selectedMembers.length;
-          final amountPerPerson = splitCount > 0 ? (totalAmount / splitCount) : 0.0;
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-              left: 20,
-              right: 20,
-              top: 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('🧾 Rechnung aufteilen (Spot-Split)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Titel & Betrag
-                TextField(
-                  controller: titleController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Wofür war die Ausgabe?',
-                    hintText: 'z.B. Restaurant, Taxi, Einkäufe',
-                    filled: true,
-                    fillColor: const Color(0xFF161E2E),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  decoration: InputDecoration(
-                    labelText: 'Gesamtbetrag (€)',
-                    hintText: '0.00',
-                    prefixText: '€ ',
-                    filled: true,
-                    fillColor: const Color(0xFF161E2E),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (_) => setModalState(() {}),
-                ),
-                const SizedBox(height: 14),
-
-                // Personen auswählen
-                Text('Aufteilen unter wem? ($splitCount ausgewählt)', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(height: 8),
-
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _groupMembers.map((member) {
-                    final isSelected = selectedMembers.contains(member);
-                    return FilterChip(
-                      label: Text(member, style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                      selected: isSelected,
-                      selectedColor: const Color(0xFF00FFA3),
-                      backgroundColor: const Color(0xFF182234),
-                      checkmarkColor: Colors.black,
-                      onSelected: (val) {
-                        setModalState(() {
-                          if (val) {
-                            selectedMembers.add(member);
-                          } else {
-                            if (selectedMembers.length > 1) {
-                              selectedMembers.remove(member);
-                            }
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Kalkulation Liquid Box
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FFA3).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: LiquidGlassCard(
+            borderRadius: 28,
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
                     children: [
-                      const Text('Jeder zahlt:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      Text(
-                        '€ ${amountPerPerson.toStringAsFixed(2)}',
-                        style: const TextStyle(color: Color(0xFF00FFA3), fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
+                      Icon(Icons.add_shopping_cart, color: Color(0xFF00FFA3)),
+                      SizedBox(width: 8),
+                      Text('Spot-Split: Neue Ausgabe', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FFA3),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Wofür? (z.B. Pizza, Drinks, Benzin)',
+                      filled: true,
+                      fillColor: const Color(0xFF141926),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
                   ),
-                  onPressed: () async {
-                    final title = titleController.text.trim();
-                    if (title.isEmpty || totalAmount <= 0 || selectedMembers.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Bitte Titel, Betrag und mindestens eine Person angeben!')),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Gesamtbetrag (€)',
+                      prefixText: '€ ',
+                      filled: true,
+                      fillColor: const Color(0xFF141926),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Aufteilen auf:', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _groupMembers.map((member) {
+                      final isSelected = selectedMembers.contains(member);
+                      return FilterChip(
+                        label: Text(member),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF00FFA3),
+                        checkmarkColor: Colors.black,
+                        labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontWeight: FontWeight.bold),
+                        backgroundColor: const Color(0xFF141926),
+                        onSelected: (val) {
+                          setModalState(() {
+                            if (val) selectedMembers.add(member);
+                            else if (selectedMembers.length > 1) selectedMembers.remove(member);
+                          });
+                        },
                       );
-                      return;
-                    }
-
-                    Navigator.pop(ctx);
-                    final success = await GitHubService().addExpense(
-                      title: title,
-                      totalAmount: totalAmount,
-                      splitBetween: selectedMembers.toList(),
-                    );
-
-                    if (success) {
-                      await _pollUpdates();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: const Color(0xFF00FFA3),
-                          content: Text('🧾 Ausgabe "$title" gespeichert und im Chat gepostet!', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Rechnung jetzt aufteilen & posten', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FFA3),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () async {
+                        final title = titleController.text.trim();
+                        final total = double.tryParse(amountController.text.replaceAll(',', '.')) ?? 0.0;
+                        if (title.isNotEmpty && total > 0 && selectedMembers.isNotEmpty) {
+                          Navigator.pop(ctx);
+                          final ok = await GitHubService().addExpense(
+                            title: title,
+                            totalAmount: total,
+                            splitBetween: selectedMembers,
+                          );
+                          if (ok) {
+                            await _pollUpdates();
+                          }
+                        }
+                      },
+                      child: const Text('Rechnung gleichmäßig aufteilen', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -463,15 +694,14 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
 
     return Column(
       children: [
-        // LIQUID GLASS TOP BAR
-        GlassContainer(
+        // TOP BAR
+        LiquidGlassCard(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           borderRadius: 24,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Code Pill
               GestureDetector(
                 onTap: _copyCode,
                 child: Container(
@@ -494,9 +724,13 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                 ),
               ),
 
-              // Action Buttons
               Row(
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.phone, color: Color(0xFF00FFA3), size: 20),
+                    onPressed: _startAudioCall,
+                    tooltip: 'VoIP Anruf',
+                  ),
                   IconButton(
                     icon: const Icon(Icons.group, color: Colors.white, size: 20),
                     onPressed: _openMembersModal,
@@ -505,7 +739,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   IconButton(
                     icon: const Icon(Icons.exit_to_app, color: Colors.redAccent, size: 20),
                     onPressed: _confirmLeaveGroup,
-                    tooltip: 'Gruppe verlassen (mit Bestätigung)',
+                    tooltip: 'Gruppe verlassen',
                   ),
                 ],
               ),
@@ -513,7 +747,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           ),
         ),
 
-        // SUB-TABS (CHAT & RECHNUNGS-TEILER)
+        // TABS
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
@@ -541,7 +775,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           child: TabBarView(
             controller: _tabController,
             children: [
-              // TAB 1: CHAT
+              // CHAT TAB
               Column(
                 children: [
                   Expanded(
@@ -549,25 +783,34 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                         ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FFA3)))
                         : _messages.isEmpty
                             ? Center(
-                                child: Text('Keine Nachrichten in "${service.currentGroupName ?? "Gruppe"}"', style: const TextStyle(color: Colors.white60)),
+                                child: Text('Noch keine Nachrichten in "${service.currentGroupName ?? "Gruppe"}"', style: const TextStyle(color: Colors.white60)),
                               )
                             : ListView.builder(
                                 controller: _scrollController,
-                                padding: const EdgeInsets.all(16),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 itemCount: _messages.length,
                                 itemBuilder: (context, index) {
                                   final msg = _messages[index];
                                   final isMe = msg['author'] == myName;
-                                  final isSystem = (msg['text'] as String?)?.startsWith('🧾 [Spot-Split]') == true || 
-                                                    (msg['text'] as String?)?.startsWith('🚫 [System]') == true;
+                                  final isSos = (msg['text'] as String?)?.contains('[NOTFALL') == true;
+                                  final hasImg = msg['image_url'] != null;
+                                  final hasAudio = msg['audio_note'] != null;
 
-                                  if (isSystem) {
-                                    return GlassContainer(
+                                  if (isSos) {
+                                    return LiquidGlassCard(
                                       margin: const EdgeInsets.symmetric(vertical: 6),
+                                      borderColor: Colors.redAccent,
+                                      backgroundColor: Colors.red.shade900.withOpacity(0.4),
                                       padding: const EdgeInsets.all(12),
-                                      borderRadius: 18,
-                                      borderColor: const Color(0xFF00FFA3).withOpacity(0.4),
-                                      child: Text(msg['text'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.4)),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.warning, color: Colors.yellowAccent, size: 26),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(msg['text'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ),
+                                        ],
+                                      ),
                                     );
                                   }
 
@@ -592,7 +835,34 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                         children: [
                                           if (!isMe)
                                             Text(msg['author'] ?? 'Anonymous', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
-                                          Text(msg['text'] ?? '', style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 13)),
+                                          if (hasImg)
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: msg['image_url'],
+                                                  width: 180,
+                                                  height: 140,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                          if (hasAudio)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.play_arrow, size: 18),
+                                                  SizedBox(width: 4),
+                                                  Text('Sprachnachricht (0:04)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                            ),
+                                          if ((msg['text'] as String?)?.isNotEmpty == true)
+                                            Text(msg['text'] ?? '', style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 13)),
                                         ],
                                       ),
                                     ),
@@ -601,7 +871,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                               ),
                   ),
 
-                  // INPUT
+                  // INPUT BAR (DURCH PADDING GETRENNT, KEINE ÜBERLAPPUNG MIT NAVIGATION BAR!)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     color: const Color(0xFF0F1420),
@@ -609,6 +879,20 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                       top: false,
                       child: Row(
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.camera_alt, color: Color(0xFF00FFA3), size: 22),
+                            onPressed: _pickAndSendImage,
+                            tooltip: 'Foto senden',
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              _isRecordingVoice ? Icons.mic : Icons.mic_none,
+                              color: _isRecordingVoice ? Colors.redAccent : const Color(0xFF6366F1),
+                              size: 22,
+                            ),
+                            onPressed: _simulateVoiceNote,
+                            tooltip: 'Sprachnachricht',
+                          ),
                           Expanded(
                             child: TextField(
                               controller: _msgController,
@@ -624,9 +908,9 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           IconButton(
-                            onPressed: _isSending ? null : _sendMessage,
+                            onPressed: _isSending ? null : () => _sendMessage(),
                             icon: const Icon(Icons.send_rounded, color: Color(0xFF00FFA3)),
                           ),
                         ],
@@ -636,7 +920,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                 ],
               ),
 
-              // TAB 2: SPOT-SPLIT (RECHNUNGS-TEILER)
+              // SPOT-SPLIT TAB
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -667,10 +951,11 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                 final total = (exp['total_amount'] as num?)?.toDouble() ?? 0.0;
                                 final splitBetween = List<String>.from(exp['split_between'] ?? []);
 
-                                return GlassContainer(
+                                return LiquidGlassCard(
                                   margin: const EdgeInsets.only(bottom: 10),
                                   padding: const EdgeInsets.all(14),
                                   borderRadius: 18,
+                                  onTap: () => _openExpenseDetail(exp),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -688,7 +973,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(10)),
                                         child: Text(
-                                          '€ ${perPerson.toStringAsFixed(2)} pro Kopf (${splitBetween.join(', ')})',
+                                          '€ ${perPerson.toStringAsFixed(2)} pro Kopf (${splitBetween.join(', ')}) • Antippen für Details',
                                           style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                                         ),
                                       ),
