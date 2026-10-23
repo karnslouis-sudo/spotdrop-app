@@ -1,4 +1,4 @@
-﻿name: Spotdrop CI - Build APK & IPA
+name: Spotdrop CI - Build APK & IPA
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up Java Development Kit (JDK 17)
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Flutter (Latest Stable)
@@ -35,11 +35,19 @@ jobs:
           rm -rf android
           flutter create . --platforms=android --org=com.spotdrop --project-name=spotdrop
 
-      - name: Configure Kotlin, Core Desugaring & Permissions
+      - name: Configure Android Permissions
         run: |
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml || true
-          cat << 'EOF' > fix_gradle.py
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Configure Gradle & Fix Subproject Namespaces (AGP 8+)
+        run: |
+          cat << 'EOF' > fix_build.py
           import os
+
+          # 1. Update Kotlin in settings.gradle
           for p in ['android/settings.gradle', 'android/settings.gradle.kts']:
               if os.path.exists(p):
                   with open(p, 'r') as f:
@@ -48,6 +56,7 @@ jobs:
                   with open(p, 'w') as f:
                       f.write(c)
 
+          # 2. Desugaring and minSdk 23 in app/build.gradle
           for p in ['android/app/build.gradle', 'android/app/build.gradle.kts']:
               if os.path.exists(p):
                   with open(p, 'r') as f:
@@ -69,23 +78,29 @@ jobs:
                   with open(p, 'w') as f:
                       f.write(c)
 
-          for p in ['android/build.gradle', 'android/build.gradle.kts']:
-              if os.path.exists(p):
-                  with open(p, 'r') as f:
-                      c = f.read()
-                  if 'subprojects' not in c:
-                      if p.endswith('.kts'):
-                          c += '\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {\n            if (namespace == null) {\n                namespace = "com.spotdrop." + project.name\n            }\n        }\n    }\n}\n'
-                      else:
-                          c += '\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty("android")) {\n            project.android {\n                if (namespace == null) {\n                    namespace = "com.spotdrop." + project.name\n                }\n            }\n        }\n    }\n}\n'
-                  with open(p, 'w') as f:
-                      f.write(c)
-          print('Successfully configured Android build files!')
-          EOF
-          python3 fix_gradle.py
+          # 3. Fix namespace in pub-cache plugins (e.g. record-4.4.4) for AGP 8
+          pub_cache = os.path.expanduser('~/.pub-cache')
+          if os.path.exists(pub_cache):
+              for root, dirs, files in os.walk(pub_cache):
+                  for file in files:
+                      if file == 'build.gradle':
+                          gp = os.path.join(root, file)
+                          try:
+                              with open(gp, 'r') as f:
+                                  gc = f.read()
+                              if 'android {' in gc and 'namespace' not in gc:
+                                  parent = os.path.basename(os.path.dirname(os.path.dirname(gp)))
+                                  ns = 'com.spotdrop.' + parent.split('-')[0].replace('.', '_')
+                                  print(f'Injecting namespace {ns} into {gp}')
+                                  gc = gc.replace('android {', f"android {{\n    namespace '{ns}'")
+                                  with open(gp, 'w') as f:
+                                      f.write(gc)
+                          except Exception as ex:
+                              print(f'Error reading {gp}: {ex}')
 
-      - name: Get Dependencies
-        run: flutter pub get
+          print('Successfully patched Android build files!')
+          EOF
+          python3 fix_build.py
 
       - name: Build APK (Release)
         run: flutter build apk --release
@@ -114,7 +129,7 @@ jobs:
           rm -rf ios
           flutter create . --platforms=ios --org=com.spotdrop --project-name=spotdrop
 
-      - name: Configure iOS Permissions & Background Modes in Info.plist
+      - name: Configure iOS Permissions in Info.plist
         run: |
           plutil -insert NSCameraUsageDescription -string "Spotdrop benötigt Zugriff auf die Kamera für den Snap-Vault." ios/Runner/Info.plist || true
           plutil -insert NSLocationWhenInUseUsageDescription -string "Spotdrop benötigt deinen Standort für die Spot-Map." ios/Runner/Info.plist || true
@@ -122,45 +137,33 @@ jobs:
           plutil -insert NSPhotoLibraryUsageDescription -string "Spotdrop benötigt Zugriff auf deine Fotos für den Upload." ios/Runner/Info.plist || true
           plutil -insert NSMicrophoneUsageDescription -string "Spotdrop benötigt Zugriff auf das Mikrofon für VoIP Audio-Anrufe und Sprachnachrichten." ios/Runner/Info.plist || true
 
-          # Background Modes for VoIP, Audio, Location, Fetch, Remote Notification
+          # Allow background audio playback and background location tracking
           plutil -insert UIBackgroundModes -array ios/Runner/Info.plist || true
           plutil -insert UIBackgroundModes.0 -string "audio" ios/Runner/Info.plist || true
           plutil -insert UIBackgroundModes.1 -string "location" ios/Runner/Info.plist || true
-          plutil -insert UIBackgroundModes.2 -string "voip" ios/Runner/Info.plist || true
-          plutil -insert UIBackgroundModes.3 -string "fetch" ios/Runner/Info.plist || true
-          plutil -insert UIBackgroundModes.4 -string "remote-notification" ios/Runner/Info.plist || true
 
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Configure iOS Podfile Deployment Target & Disable Code Signing
+      - name: Configure iOS Podfile Deployment Target
         run: |
-          python3 -c "
+          cat << 'EOF' > fix_ios.py
           import os
           p = 'ios/Podfile'
           if os.path.exists(p):
               with open(p, 'r') as f:
                   c = f.read()
-              c = c.replace('# platform :ios, \'12.0\'', 'platform :ios, \'13.0\'')
-              c = c.replace('# platform :ios, \'11.0\'', 'platform :ios, \'13.0\'')
-              c = c.replace('platform :ios, \'12.0\'', 'platform :ios, \'13.0\'')
-              c = c.replace('platform :ios, \'11.0\'', 'platform :ios, \'13.0\'')
+              c = c.replace("# platform :ios, '12.0'", "platform :ios, '13.0'")
+              c = c.replace("# platform :ios, '11.0'", "platform :ios, '13.0'")
+              c = c.replace("platform :ios, '12.0'", "platform :ios, '13.0'")
+              c = c.replace("platform :ios, '11.0'", "platform :ios, '13.0'")
               if 'platform :ios' not in c:
-                  c = 'platform :ios, \'13.0\'\n' + c
+                  c = "platform :ios, '13.0'\n" + c
               with open(p, 'w') as f:
                   f.write(c)
-
-          # Disable code signing requirement for unsigned sideloading (AltStore / Sideloadly)
-          proj = 'ios/Runner.xcodeproj/project.pbxproj'
-          if os.path.exists(proj):
-              with open(proj, 'r') as f:
-                  c = f.read()
-              c = c.replace('CODE_SIGN_IDENTITY = \"iPhone Developer\";', 'CODE_SIGN_IDENTITY = \"\"; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO;')
-              c = c.replace('CODE_SIGNING_ALLOWED = YES;', 'CODE_SIGNING_ALLOWED = NO;')
-              with open(proj, 'w') as f:
-                  f.write(c)
-          print('Successfully patched iOS project files!')
-          "
+          print('Podfile deployment target set to 13.0')
+          EOF
+          python3 fix_ios.py
 
       - name: Build iOS App (Release No-Codesign)
         run: flutter build ios --release --no-codesign
