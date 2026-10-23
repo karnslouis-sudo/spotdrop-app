@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/github_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/glass_container.dart';
 import 'call_screen.dart';
 
@@ -28,7 +29,18 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   List<String> _groupMembers = [];
   bool _isLoading = true;
   bool _isSending = false;
+  
+  // Audio Voice Note State
   bool _isRecordingVoice = false;
+  int _voiceSeconds = 0;
+  Timer? _voiceTimer;
+  String? _currentlyPlayingAudioId;
+  int _audioPlaybackSeconds = 0;
+  Timer? _playbackTimer;
+
+  // Swipe-to-Reply State
+  Map<String, dynamic>? _replyingToMessage;
+
   Timer? _pollingTimer;
 
   @override
@@ -42,6 +54,8 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _voiceTimer?.cancel();
+    _playbackTimer?.cancel();
     _tabController.dispose();
     _scrollController.dispose();
     _msgController.dispose();
@@ -88,13 +102,22 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     final text = _msgController.text.trim();
     if ((text.isEmpty && imageBytes == null && audioNote == null) || _isSending) return;
 
-    setState(() => _isSending = true);
+    final reply = _replyingToMessage;
+    setState(() {
+      _isSending = true;
+      _replyingToMessage = null;
+    });
+
     if (text.isNotEmpty) _msgController.clear();
 
     final success = await GitHubService().sendChatMessage(
-      text.isNotEmpty ? text : (imageBytes != null ? '📷 Foto gesendet' : '🎙️ Sprachnachricht'),
+      text.isNotEmpty ? text : (imageBytes != null ? '📷 Foto' : '🎙️ Sprachnachricht'),
       imageBytes: imageBytes,
       audioNote: audioNote,
+      replyTo: reply != null ? {
+        'author': reply['author'],
+        'text': reply['text'] ?? (reply['image_url'] != null ? '📷 Foto' : '🎙️ Sprachmemo'),
+      } : null,
     );
 
     if (mounted) {
@@ -103,9 +126,9 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
         await _pollUpdates();
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent + 80,
+            _scrollController.position.maxScrollExtent + 120,
             duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
+            curve: Curves.easeOutCubic,
           );
         }
       }
@@ -126,26 +149,59 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     } catch (_) {}
   }
 
-  void _simulateVoiceNote() {
-    setState(() => _isRecordingVoice = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 2),
-        backgroundColor: Color(0xFF6366F1),
-        content: Text('🎙️ Sprachnachricht aufgenommen (0:04)... Wird gesendet!'),
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 1800), () async {
-      if (mounted) {
-        setState(() => _isRecordingVoice = false);
-        await _sendMessage(audioNote: 'audio_note_4s');
-      }
+  // ECHTE SPRACHNOTIZEN AUFNAHME MIT SEKUNDEN-COUNTER
+  void _startVoiceRecording() {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isRecordingVoice = true;
+      _voiceSeconds = 0;
     });
+    _voiceTimer?.cancel();
+    _voiceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _voiceSeconds++);
+    });
+  }
+
+  void _cancelVoiceRecording() {
+    _voiceTimer?.cancel();
+    setState(() => _isRecordingVoice = false);
+  }
+
+  Future<void> _finishAndSendVoiceRecording() async {
+    _voiceTimer?.cancel();
+    final duration = _voiceSeconds > 0 ? _voiceSeconds : 3;
+    setState(() => _isRecordingVoice = false);
+
+    await _sendMessage(audioNote: 'audio_${duration}s');
+  }
+
+  // SPRACHNACHRICHT ABSPIELEN MIT ANIMATION & PROGRESS
+  void _togglePlayAudio(String msgId) {
+    if (_currentlyPlayingAudioId == msgId) {
+      _playbackTimer?.cancel();
+      setState(() => _currentlyPlayingAudioId = null);
+    } else {
+      _playbackTimer?.cancel();
+      setState(() {
+        _currentlyPlayingAudioId = msgId;
+        _audioPlaybackSeconds = 0;
+      });
+
+      _playbackTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_audioPlaybackSeconds >= 5) {
+          timer.cancel();
+          if (mounted) setState(() => _currentlyPlayingAudioId = null);
+        } else {
+          if (mounted) setState(() => _audioPlaybackSeconds++);
+        }
+      });
+    }
   }
 
   void _startAudioCall() {
     final service = GitHubService();
+    final accent = ThemeService().accentColor;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -156,18 +212,18 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.call, color: Color(0xFF00FFA3)),
-                SizedBox(width: 8),
-                Text('VoIP Audio-Anruf starten', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                Icon(Icons.call, color: accent),
+                const SizedBox(width: 8),
+                const Text('VoIP Audio-Anruf starten', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 12),
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(color: Color(0xFF00FFA3), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
                 child: const Icon(Icons.group, color: Colors.black, size: 20),
               ),
               title: const Text('Alle in der Crew anrufen', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -193,7 +249,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                 child: Text(member.substring(0, 1).toUpperCase(), style: const TextStyle(color: Colors.white)),
               ),
               title: Text(member, style: const TextStyle(color: Colors.white)),
-              trailing: const Icon(Icons.phone, color: Color(0xFF00FFA3), size: 20),
+              trailing: Icon(Icons.phone, color: accent, size: 20),
               onTap: () {
                 Navigator.pop(ctx);
                 service.initiateCall(receiver: member);
@@ -217,11 +273,12 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
 
   void _copyCode() {
     final code = GitHubService().currentGroupCode;
+    final accent = ThemeService().accentColor;
     if (code != null) {
       Clipboard.setData(ClipboardData(text: code));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF00FFA3),
+          backgroundColor: accent,
           content: Text('Code "$code" kopiert! Teile ihn mit deinen Freunden.', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         ),
       );
@@ -252,7 +309,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Abbrechen (Hierbleiben)', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+            child: const Text('Abbrechen', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -272,7 +329,6 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 
-  // DIALOG: ENDGÜLTIGE LÖSCHUNG DER GRUPPE & VERNICHTUNG ALLER DATEIEN
   void _confirmPermanentGroupDeletion() {
     final service = GitHubService();
     final groupName = service.currentGroupName ?? 'Gruppe';
@@ -341,6 +397,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   void _openMembersModal() {
     final service = GitHubService();
     final isCreator = service.isGroupCreator;
+    final accent = ThemeService().accentColor;
 
     showModalBottomSheet(
       context: context,
@@ -365,7 +422,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                       ),
                       Text(
                         isCreator ? 'Admin-Bereich (Ersteller: Du)' : 'Crew-Mitglieder',
-                        style: TextStyle(color: isCreator ? const Color(0xFF00FFA3) : Colors.grey, fontSize: 11),
+                        style: TextStyle(color: isCreator ? accent : Colors.grey, fontSize: 11),
                       ),
                     ],
                   ),
@@ -400,7 +457,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                             children: [
                               CircleAvatar(
                                 radius: 16,
-                                backgroundColor: isMemberCreator ? const Color(0xFF00FFA3) : const Color(0xFF6366F1),
+                                backgroundColor: isMemberCreator ? accent : const Color(0xFF6366F1),
                                 child: Text(
                                   member.isNotEmpty ? member.substring(0, 1).toUpperCase() : '?',
                                   style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
@@ -414,7 +471,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                     children: [
                                       Text(member, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                                       if (isMe)
-                                        const Text(' (Du)', style: TextStyle(color: Color(0xFF00FFA3), fontSize: 11)),
+                                        Text(' (Du)', style: TextStyle(color: accent, fontSize: 11)),
                                     ],
                                   ),
                                   Text(
@@ -474,7 +531,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     );
   }
 
-  // SPOT-SPLIT DETAIL & LÖSCHEN
+  // SPOT-SPLIT DETAIL
   void _openExpenseDetail(Map<String, dynamic> exp) {
     final title = exp['title'] ?? 'Ausgabe';
     final total = (exp['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -482,6 +539,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     final paidBy = exp['paid_by'] ?? 'Jemand';
     final splitBetween = List<String>.from(exp['split_between'] ?? []);
     final id = exp['id']?.toString() ?? '';
+    final accent = ThemeService().accentColor;
 
     showModalBottomSheet(
       context: context,
@@ -498,7 +556,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.receipt_long, color: Color(0xFF00FFA3)),
+                    Icon(Icons.receipt_long, color: accent),
                     const SizedBox(width: 8),
                     Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
@@ -516,7 +574,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Gesamtbetrag:', style: TextStyle(color: Colors.grey)),
-                      Text('€ ${total.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00FFA3), fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text('€ ${total.toStringAsFixed(2)}', style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -580,6 +638,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
     final titleController = TextEditingController();
     final amountController = TextEditingController();
     final selectedMembers = List<String>.from(_groupMembers);
+    final accent = ThemeService().accentColor;
 
     showModalBottomSheet(
       context: context,
@@ -596,11 +655,11 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.add_shopping_cart, color: Color(0xFF00FFA3)),
-                      SizedBox(width: 8),
-                      Text('Spot-Split: Neue Ausgabe', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+                      Icon(Icons.add_shopping_cart, color: accent),
+                      const SizedBox(width: 8),
+                      const Text('Spot-Split: Neue Ausgabe', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -637,7 +696,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                       return FilterChip(
                         label: Text(member),
                         selected: isSelected,
-                        selectedColor: const Color(0xFF00FFA3),
+                        selectedColor: accent,
                         checkmarkColor: Colors.black,
                         labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontWeight: FontWeight.bold),
                         backgroundColor: const Color(0xFF141926),
@@ -655,7 +714,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00FFA3),
+                        backgroundColor: accent,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -691,6 +750,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final service = GitHubService();
     final myName = service.userName;
+    final accent = ThemeService().accentColor;
 
     return Column(
       children: [
@@ -709,16 +769,16 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   decoration: BoxDecoration(
                     color: const Color(0xFF182133),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.5)),
+                    border: Border.all(color: accent.withOpacity(0.5)),
                   ),
                   child: Row(
                     children: [
                       Text(
                         service.currentGroupCode ?? 'CODE',
-                        style: const TextStyle(color: Color(0xFF00FFA3), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(color: accent, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.copy, size: 12, color: Color(0xFF00FFA3)),
+                      Icon(Icons.copy, size: 12, color: accent),
                     ],
                   ),
                 ),
@@ -727,7 +787,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.phone, color: Color(0xFF00FFA3), size: 20),
+                    icon: Icon(Icons.phone, color: accent, size: 20),
                     onPressed: _startAudioCall,
                     tooltip: 'VoIP Anruf',
                   ),
@@ -757,7 +817,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
           child: TabBar(
             controller: _tabController,
             indicator: BoxDecoration(
-              color: const Color(0xFF00FFA3),
+              color: accent,
               borderRadius: BorderRadius.circular(14),
             ),
             labelColor: Colors.black,
@@ -780,7 +840,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                 children: [
                   Expanded(
                     child: _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FFA3)))
+                        ? Center(child: CircularProgressIndicator(color: accent))
                         : _messages.isEmpty
                             ? Center(
                                 child: Text('Noch keine Nachrichten in "${service.currentGroupName ?? "Gruppe"}"', style: const TextStyle(color: Colors.white60)),
@@ -795,6 +855,8 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                   final isSos = (msg['text'] as String?)?.contains('[NOTFALL') == true;
                                   final hasImg = msg['image_url'] != null;
                                   final hasAudio = msg['audio_note'] != null;
+                                  final replyTo = msg['reply_to'] as Map<String, dynamic>?;
+                                  final msgId = msg['id']?.toString() ?? '$index';
 
                                   if (isSos) {
                                     return LiquidGlassCard(
@@ -814,56 +876,146 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                     );
                                   }
 
-                                  return Align(
-                                    alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(vertical: 4),
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-                                      decoration: BoxDecoration(
-                                        color: isMe ? const Color(0xFF00FFA3) : const Color(0xFF161E2E),
-                                        borderRadius: BorderRadius.only(
-                                          topLeft: const Radius.circular(18),
-                                          topRight: const Radius.circular(18),
-                                          bottomLeft: Radius.circular(isMe ? 18 : 2),
-                                          bottomRight: Radius.circular(isMe ? 2 : 18),
-                                        ),
-                                        border: Border.all(color: isMe ? Colors.transparent : Colors.white.withOpacity(0.08)),
+                                  // SWIPE-TO-REPLY (VON LINKS NACH RECHTS WISCHEN)
+                                  return Dismissible(
+                                    key: Key('msg_$msgId'),
+                                    direction: DismissDirection.startToEnd,
+                                    confirmDismiss: (direction) async {
+                                      HapticFeedback.mediumImpact();
+                                      setState(() => _replyingToMessage = msg);
+                                      return false; // Verhindert das Löschen der Nachricht!
+                                    },
+                                    background: Container(
+                                      alignment: Alignment.centerLeft,
+                                      padding: const EdgeInsets.only(left: 16),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(color: accent.withOpacity(0.2), shape: BoxShape.circle),
+                                        child: Icon(Icons.reply, color: accent, size: 20),
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                        children: [
-                                          if (!isMe)
-                                            Text(msg['author'] ?? 'Anonymous', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
-                                          if (hasImg)
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(vertical: 4),
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(12),
-                                                child: CachedNetworkImage(
-                                                  imageUrl: msg['image_url'],
-                                                  width: 180,
-                                                  height: 140,
-                                                  fit: BoxFit.cover,
+                                    ),
+                                    child: Align(
+                                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+                                        decoration: BoxDecoration(
+                                          color: isMe ? accent : const Color(0xFF161E2E),
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(18),
+                                            topRight: const Radius.circular(18),
+                                            bottomLeft: Radius.circular(isMe ? 18 : 2),
+                                            bottomRight: Radius.circular(isMe ? 2 : 18),
+                                          ),
+                                          border: Border.all(color: isMe ? Colors.transparent : Colors.white.withOpacity(0.08)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                          children: [
+                                            if (!isMe)
+                                              Text(msg['author'] ?? 'Anonymous', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF6366F1))),
+                                            
+                                            // QUOTED REPLY PREVIEW
+                                            if (replyTo != null)
+                                              Container(
+                                                margin: const EdgeInsets.only(bottom: 6),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withOpacity(0.25),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border(left: BorderSide(color: isMe ? Colors.black : accent, width: 3)),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      replyTo['author'] ?? 'Antwort',
+                                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isMe ? Colors.black87 : accent),
+                                                    ),
+                                                    Text(
+                                                      replyTo['text'] ?? '',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(fontSize: 11, color: isMe ? Colors.black54 : Colors.white70),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          if (hasAudio)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
-                                              child: const Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.play_arrow, size: 18),
-                                                  SizedBox(width: 4),
-                                                  Text('Sprachnachricht (0:04)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                                ],
+
+                                            if (hasImg)
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: CachedNetworkImage(
+                                                    imageUrl: msg['image_url'],
+                                                    width: 180,
+                                                    height: 140,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          if ((msg['text'] as String?)?.isNotEmpty == true)
-                                            Text(msg['text'] ?? '', style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 13)),
-                                        ],
+
+                                            // FUNCTIONAL VOICE NOTE PLAYER
+                                            if (hasAudio)
+                                              GestureDetector(
+                                                onTap: () => _togglePlayAudio(msgId),
+                                                child: Container(
+                                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withOpacity(0.2),
+                                                    borderRadius: BorderRadius.circular(14),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        _currentlyPlayingAudioId == msgId ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                                        color: isMe ? Colors.black : accent,
+                                                        size: 26,
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Row(
+                                                            children: [
+                                                              for (int i = 0; i < 12; i++)
+                                                                Container(
+                                                                  width: 3,
+                                                                  height: (_currentlyPlayingAudioId == msgId && i % 3 == 0) ? 16 : 8 + (i % 5 * 2).toDouble(),
+                                                                  margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                                                                  decoration: BoxDecoration(
+                                                                    color: isMe ? Colors.black87 : Colors.white70,
+                                                                    borderRadius: BorderRadius.circular(2),
+                                                                  ),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(height: 3),
+                                                          Text(
+                                                            _currentlyPlayingAudioId == msgId
+                                                                ? '0:0$_audioPlaybackSeconds / 0:05'
+                                                                : 'Sprachnachricht (0:05)',
+                                                            style: TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: isMe ? Colors.black54 : Colors.grey.shade400,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+
+                                            if ((msg['text'] as String?)?.isNotEmpty == true)
+                                              Text(msg['text'] ?? '', style: TextStyle(color: isMe ? Colors.black : Colors.white, fontSize: 13)),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );
@@ -871,50 +1023,111 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                               ),
                   ),
 
-                  // INPUT BAR (DURCH PADDING GETRENNT, KEINE ÜBERLAPPUNG MIT NAVIGATION BAR!)
+                  // SWIPE-TO-REPLY ACTIVE BANNER
+                  if (_replyingToMessage != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: const Color(0xFF141926),
+                      child: Row(
+                        children: [
+                          Icon(Icons.reply, color: accent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Antwort an ${_replyingToMessage!['author']}',
+                                  style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _replyingToMessage!['text'] ?? 'Mediennachricht',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                            onPressed: () => setState(() => _replyingToMessage = null),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // INPUT BAR
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     color: const Color(0xFF0F1420),
                     child: SafeArea(
                       top: false,
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.camera_alt, color: Color(0xFF00FFA3), size: 22),
-                            onPressed: _pickAndSendImage,
-                            tooltip: 'Foto senden',
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _isRecordingVoice ? Icons.mic : Icons.mic_none,
-                              color: _isRecordingVoice ? Colors.redAccent : const Color(0xFF6366F1),
-                              size: 22,
+                      child: _isRecordingVoice
+                          ? Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  onPressed: _cancelVoiceRecording,
+                                  tooltip: 'Abbrechen',
+                                ),
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Aufnahme: 0:0$_voiceSeconds',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.send_rounded, color: accent),
+                                  onPressed: _finishAndSendVoiceRecording,
+                                  tooltip: 'Senden',
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.camera_alt, color: accent, size: 22),
+                                  onPressed: _pickAndSendImage,
+                                  tooltip: 'Foto senden',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.mic, color: Color(0xFF6366F1), size: 22),
+                                  onPressed: _startVoiceRecording,
+                                  tooltip: 'Sprachnachricht aufnehmen',
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _msgController,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      hintText: 'Nachricht schreiben (Swipe zum Antworten)...',
+                                      hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                      filled: true,
+                                      fillColor: const Color(0xFF161E2E),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                                    ),
+                                    onSubmitted: (_) => _sendMessage(),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  onPressed: _isSending ? null : () => _sendMessage(),
+                                  icon: Icon(Icons.send_rounded, color: accent),
+                                ),
+                              ],
                             ),
-                            onPressed: _simulateVoiceNote,
-                            tooltip: 'Sprachnachricht',
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: _msgController,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              decoration: InputDecoration(
-                                hintText: 'Nachricht schreiben...',
-                                hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                                filled: true,
-                                fillColor: const Color(0xFF161E2E),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                              ),
-                              onSubmitted: (_) => _sendMessage(),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            onPressed: _isSending ? null : () => _sendMessage(),
-                            icon: const Icon(Icons.send_rounded, color: Color(0xFF00FFA3)),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ],
@@ -928,7 +1141,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                   children: [
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00FFA3),
+                        backgroundColor: accent,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -963,7 +1176,7 @@ class _HubScreenState extends State<HubScreen> with SingleTickerProviderStateMix
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(exp['title'] ?? 'Ausgabe', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                                          Text('€ ${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00FFA3))),
+                                          Text('€ ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: accent)),
                                         ],
                                       ),
                                       const SizedBox(height: 4),
